@@ -1,0 +1,77 @@
+site_name: Ouroboros - Feira da Troca BD
+site_description: Sistema de economia digital fechada para a Feira da Troca
+site_author: Caio Fiori Martins
+site_url: https://fiorionrails.github.io/feira-da-troca
+repo_url: https://github.com/fiorionrails/feira-da-troca
+repo_name: fiorionrails/feira-da-troca
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: pt-BR
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Modo claro
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Modo escuro
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search:
+      lang: pt
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+
+nav:
+  - Início: index.md
+  - Arquitetura:
+      - Visão Geral: architecture/overview.md
+      - "ADR-001: Local-First": architecture/adr-001.md
+      - "ADR-002: SQLite": architecture/adr-002.md
+      - "ADR-003: Event Sourcing": architecture/adr-003.md
+  - Diagramas:
+      - Fluxos de Sequência: diagrams/sequence.md
+  - API:
+      - Referência: api/reference.md
+  - Guias:
+      - Setup Local: guides/setup.md
+      - Plano de Resiliência: guides/resilience.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/fiorionrails
+    - icon: fontawesome/brands/linkedin
+      link: https://linkedin.com/in/caiofiorimartins
