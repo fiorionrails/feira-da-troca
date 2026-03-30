@@ -4,11 +4,9 @@
 
 ---
 
-## O que é
+Ouroboros é um sistema de **economia digital fechada** projetado especialmente para a **Feira da Troca na Etec Profª Terezinha Monteiro dos Santos** em Taquarituba, mas adaptável para outros eventos escolares com múltiplos pontos de venda. Substitui moedas físicas (papelão, fichas) por uma camada digital resiliente, operando **100% offline** dentro da rede local do evento e sincronizando de forma eventual com a nuvem quando há conexão disponível.
 
-Ouroboros é um sistema de **economia digital fechada** projetado para eventos escolares com múltiplos pontos de venda. Substitui moedas físicas (papelão, fichas) por uma camada digital resiliente, operando **100% offline** dentro da rede local do evento e sincronizando de forma eventual com a nuvem quando há conexão disponível.
-
-O sistema foi concebido para resolver um problema real: feiras escolares com economia própria sofrem com o caos de moedas físicas, filas, erros de troco e impossibilidade de auditoria. A solução óbvia — colocar tudo em nuvem — quebra no primeiro momento em que o WiFi falha ou o plano gratuito atinge seu limite de requisições.
+O projeto foi concebido para resolver um problema real do evento na Etec de Taquarituba: feiras com economia própria sofrem com o caos de moedas físicas, filas, erros de troco e impossibilidade de auditoria. A solução óbvia — colocar tudo em nuvem — quebra no primeiro momento em que o WiFi falha ou o plano gratuito atinge seu limite de requisições.
 
 **Ouroboros parte da premissa inversa: a rede local é o ambiente principal. A nuvem é o espelho.**
 
@@ -20,7 +18,7 @@ O sistema foi concebido para resolver um problema real: feiras escolares com eco
 |---|---|---|---|
 | WiFi cai | ✅ Funciona | ❌ Sistema para | ✅ Funciona |
 | Rate limit da API | ✅ N/A | ❌ Requisições bloqueadas | ✅ N/A (local) |
-| Cliente quer ver saldo | ❌ Imposível | ✅ | ✅ (via Firebase, leitura) |
+| Cliente quer ver saldo | ⚠️ Requer contagem manual | ✅ Funciona | ✅ (via Firebase, leitura) |
 | Auditoria de transações | ❌ Zero | ⚠️ Depende do provedor | ✅ Event log imutável |
 | Energia acaba | ✅ Funciona | ❌ Sistema para | ✅ Estado persistido no disco |
 
@@ -31,13 +29,15 @@ O sistema foi concebido para resolver um problema real: feiras escolares com eco
 ```mermaid
 graph LR
     A[Terminal da Loja] -- WebSocket --> B[Servidor Principal]
+    F[Terminal do Banco] -- WebSocket --> B
     B -- SQLite --> C[(Event Store Local)]
     B -- sync assíncrono --> D[Firebase Firestore]
     D -- leitura --> E[Celular do Cliente]
 ```
 
 - **Servidor principal** roda na rede local do evento (um notebook é suficiente)
-- **Terminais** são qualquer browser na mesma rede — tablet, celular, notebook
+- **Terminais** (Lojas e Banco) são qualquer browser na mesma rede — tablet, celular, notebook
+- **Banco** é a central de entrada: onde novos produtos são cadastrados, comandas são criadas e o saldo inicial é inserido no sistema (entrada de dados)
 - **Firebase** recebe eventos já confirmados, apenas para consulta do cliente
 - **Nenhuma transação depende de internet**
 
