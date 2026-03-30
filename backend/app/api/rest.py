@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
+from pydantic import BaseModel
+import uuid
 from app.database import get_db_connection
 from app.config import settings
 
@@ -48,3 +50,24 @@ def get_categories(token: str = Depends(verify_admin)):
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM categories ORDER BY name ASC")
         return [dict(row) for row in cursor.fetchall()]
+
+class CategoryCreate(BaseModel):
+    name: str
+    price: int
+
+@router.post("/categories")
+def create_category(category: CategoryCreate, token: str = Depends(verify_admin)):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Check if already exists (case-insensitive)
+        cursor.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (category.name,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Categoria já existe")
+            
+        new_id = str(uuid.uuid4())
+        cursor.execute(
+            "INSERT INTO categories (id, name, price) VALUES (?, ?, ?)",
+            (new_id, category.name, category.price)
+        )
+        conn.commit()
+        return {"id": new_id, "name": category.name, "price": category.price}

@@ -38,11 +38,12 @@ manager = AdminConnectionManager()
 
 @router.websocket("/ws/admin")
 async def websocket_admin(websocket: WebSocket, token: str):
+    await manager.connect(websocket)
+    
     if token != settings.admin_token:
         await websocket.close(code=1008, reason="Unauthorized")
+        manager.disconnect(websocket)
         return
-
-    await manager.connect(websocket)
     
     # Invia estado inicial ao conectar
     with get_db_connection() as conn:

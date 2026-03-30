@@ -39,14 +39,15 @@ store_manager = StoreConnectionManager()
 
 @router.websocket("/ws/store")
 async def websocket_store(websocket: WebSocket, token: str):
+    await store_manager.connect(websocket)
+    
     with get_db_connection() as conn:
         store = get_store_by_token(conn, token)
         
     if not store:
         await websocket.close(code=1008, reason="Store Token Unauthorized")
+        store_manager.disconnect(websocket)
         return
-
-    await store_manager.connect(websocket)
     
     await websocket.send_json({
         "type": "connected",
