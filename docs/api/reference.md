@@ -56,7 +56,7 @@ Cria uma nova comanda e emite o saldo inicial.
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "holder_name": "João Silva",
-  "code": "1042",
+  "code": "F104",
   "balance": 2000,
   "created_at": "2024-11-15T09:00:00Z"
 }
@@ -186,7 +186,7 @@ Solicita um débito em uma comanda.
 ```json
 {
   "type": "debit_request",
-  "comanda_code": "1042",
+  "comanda_code": "F104",
   "amount": 650
 }
 ```
@@ -222,7 +222,7 @@ Consulta o saldo de uma comanda sem realizar débito (para exibir ao cliente ant
 ```json
 {
   "type": "balance_query",
-  "comanda_code": "1042"
+  "comanda_code": "F104"
 }
 ```
 
@@ -233,6 +233,69 @@ Consulta o saldo de uma comanda sem realizar débito (para exibir ao cliente ant
   "comanda_id": "550e8400-...",
   "holder_name": "João Silva",
   "balance": 1350
+}
+```
+
+## WebSocket — Administração e Banco
+
+Interface para operadores do Banco e Administradores. Mantém sincronia entre os múltiplos terminais de cadastro.
+
+### Conexão
+
+```
+ws://localhost:8000/ws/admin?token=<admin_token>
+```
+
+### Mensagens do Admin → Servidor
+
+#### `create_comanda`
+
+Solicita a criação de uma nova comanda com saldo inicial.
+
+```json
+{
+  "type": "create_comanda",
+  "holder_name": "Maria Oliveira",
+  "initial_balance": 5000
+}
+```
+
+#### `register_category`
+
+Cadastra ou atualiza uma categoria/preço de produto.
+
+```json
+{
+  "type": "register_category",
+  "name": "Bolsa",
+  "price": 1500,
+  "total_entries": 10
+}
+```
+
+### Mensagens do Servidor → Admin (broadcast)
+
+#### `comanda_created`
+
+Confirmado para todos os admins quando uma nova comanda é gerada.
+
+```json
+{
+  "type": "comanda_created",
+  "code": "F105",
+  "holder_name": "Maria Oliveira",
+  "balance": 5000
+}
+```
+
+#### `update_next_code`
+
+Informa aos terminais qual será o próximo código `Fxxx` disponível, evitando conflitos de entrada manual.
+
+```json
+{
+  "type": "update_next_code",
+  "next_code": "F106"
 }
 ```
 
@@ -249,7 +312,7 @@ Disparado após qualquer transação confirmada no sistema.
 ```json
 {
   "type": "balance_updated",
-  "comanda_id": "550e8400-...",
+  "comanda_code": "F104",
   "new_balance": 700,
   "event_type": "debit",
   "store_id": "store_loja_italiana"

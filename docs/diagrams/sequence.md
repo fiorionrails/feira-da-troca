@@ -15,11 +15,12 @@ sequenceDiagram
     participant DB as SQLite
     participant FB as Firebase
 
-    Admin->>API: POST /comandas {holder_name, initial_balance}
-    API->>DB: INSERT INTO comandas
+    Admin->>API: WS message: create_comanda {holder_name, initial_balance}
+    API->>DB: INSERT INTO comandas (generates code Fxxx)
     API->>DB: INSERT INTO events (type=credit, amount=initial_balance)
     DB-->>API: ok
-    API-->>Admin: {comanda_id, code, balance}
+    API-->>Admin: WS: comanda_created {comanda_id, code: "F001", balance}
+    API-->>Outros: WS: update_next_code {next_code: "F002"}
     
     Note over API,FB: sync assíncrono (background task)
     API->>FB: write comanda + evento (best-effort)
@@ -28,8 +29,8 @@ sequenceDiagram
 
 **Pontos de atenção:**
 
-- O código da comanda (`code`) é gerado no servidor e é curto o suficiente para digitação manual
-- A resposta ao admin não espera o Firebase — a sync é fire-and-forget
+- O código da comanda (`code`) é gerado no servidor no formato `F001`, `F002`, etc.
+- O WebSocket garante que todos os ~5 operadores vejam o próximo código disponível em tempo real, evitando duplicidade.
 - Se o Firebase estiver offline, a comanda ainda é criada normalmente
 
 ---

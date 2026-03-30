@@ -45,16 +45,15 @@ Qualquer dispositivo com browser conectado à rede local. Sem instalação.
 
 **Stack:** React + Vite (servido pelo próprio servidor)
 
-### Painel Administrativo
+### Interface de Administração e Operação (Admin & Banco)
 
-Interface exclusiva do organizador do evento.
+Interface de gestão para organizadores e sub-administradores (operadores do Banco).
 
 **Responsabilidades:**
 
-- Criar e emitir comandas (IDs numéricos ou alfanuméricos)
-- Definir o saldo inicial de cada participante
-- Visualizar o estado geral da economia
-- Exportar log de transações
+- **Admin Principal:** Controle total, gestão de lojas, tokens e visão macro da economia.
+- **Banco (Sub-admin):** Cadastro de novos produtos/categorias, emissão de comandas com saldo inicial e auditoria operacional local.
+- Visualização do estado geral da economia e exportação de transações.
 
 ### Firebase Firestore (camada de leitura)
 
@@ -81,9 +80,10 @@ graph TB
         sqlite[("SQLite\nEvent Store")]
         static["Assets Estáticos\n(React build)"]
         
-        terminal_a -- "WebSocket" --> servidor
-        terminal_b -- "WebSocket" --> servidor
-        admin -- "HTTP REST" --> servidor
+        terminal_a -- "WS (Lojas)" --> servidor
+        terminal_b -- "WS (Lojas)" --> servidor
+        admin -- "WS (Operacional)" --> servidor
+        admin -- "REST (Relatórios)" --> servidor
         servidor -- "leitura/escrita" --> sqlite
         servidor -- "serve" --> static
     end
@@ -101,15 +101,26 @@ graph TB
 ```
 
 ---
+ 
+## Gestão de Produtos e Categorias
+
+O Banco é responsável pela entrada de novos produtos no ecossistema da feira. A arquitetura de produtos segue uma estratégia de **Categorização Generalizada** por motivos de eficiência operacional (evitar o "trabalho braçal" de etiquetar milhares de itens individualmente):
+
+- **Abstração de Itens:** Em vez de IDs únicos por objeto físico, o sistema trabalha com categorias (ex: CAMISETA, JAQUETA, BOLSA, BRINQUEDO).
+- **Finalidade Organizacional:** A categorização serve para fins estatísticos e de auditoria, sem travar a venda em caso de erro humano (ex: vender uma Jaqueta como Camiseta).
+- **Controle de Estoque:** O sistema rastreia o volume total de entradas e saídas por categoria de forma cumulativa (incremento), permitindo comparar o que entrou no Banco vs o que circulou nas lojas.
+- **Preços Fixos:** Cada categoria possui uma tabela de preços definida centralmente no Banco.
+ 
+ ---
 
 ## Modelo de dados
 
-O sistema opera com **quatro entidades centrais**:
+O sistema opera com **cinco entidades centrais**:
 
 ```
 Comanda
   id: UUID (interno)
-  code: string (ID curto para digitação)
+  code: string (ID curto: "F001" a "F999")
   holder_name: string
   created_at: timestamp
 
@@ -127,6 +138,13 @@ Store
   name: string
   theme: string
   terminal_token: string
+
+Category (Tabela de Preços e Categorização)
+  id: UUID
+  name: string (ex: "Jaqueta")
+  price: integer (centavos fictícios)
+  total_entries: integer (contador acumulativo de entrada no banco)
+  total_exits: integer (contador acumulativo de vendas confirmadas)
 
 Balance (view derivada — nunca armazenada diretamente)
   comanda_id: UUID
@@ -155,7 +173,7 @@ Balance (view derivada — nunca armazenada diretamente)
 
 ## Decisões de design
 
-As principais escolhas arquiteturais estão documentadas como ADRs (Architecture Decision Records):
+As principais escolhas arquiteturais estão documentadas como ADRs (Architecture Decision Records). O projeto foca em suportar o fluxo de usuários (Lojas, Clientes) e os níveis de permissão administrativa (Admin e Banco/Sub-admin).
 
 | Decisão | Documento |
 |---|---|

@@ -37,7 +37,7 @@ graph LR
 
 - **Servidor principal** roda na rede local do evento (um notebook é suficiente)
 - **Terminais** (Lojas e Banco) são qualquer browser na mesma rede — tablet, celular, notebook
-- **Banco** é a central de entrada: onde novos produtos são cadastrados, comandas são criadas e o saldo inicial é inserido no sistema (entrada de dados)
+- **Banco (Sub-admin)** é o perfil de usuário responsável pela entrada: onde novos produtos são cadastrados, comandas são criadas e o saldo inicial é inserido no sistema
 - **Firebase** recebe eventos já confirmados, apenas para consulta do cliente
 - **Nenhuma transação depende de internet**
 
