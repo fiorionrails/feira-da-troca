@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Ouroboros - Teste de WebSocket (Admin)</title>
+        <style>
+            body { font-family: Arial, sans-serif; padding: 20px; background: #1e1e1e; color: #fff; }
+            input, button { padding: 10px; margin: 5px 0; }
+            #log { margin-top: 20px; padding: 10px; background: #000; border: 1px solid #333; height: 300px; overflow-y: scroll; font-family: monospace; }
+        </style>
+    </head>
+    <body>
+        <h2>Simulador de Painel Admin (WebSocket)</h2>
+        <p>Token Administrativo (veja no seu .env):</p>
+        <input type="text" id="token" value="your_admin_token_here" style="width: 300px;">
+        <button onclick="connect()">1. Conectar ao Banco</button>
+        <button onclick="disconnect()" style="background: #a00; color: white;">Desconectar</button>
+        
+        <hr>
+        
+        <h3>Ações</h3>
+        <p>Criar Comanda Fxxx com Saldo Inicial:</p>
+        <input type="text" id="holderName" placeholder="Nome do Aluno (ex: João)">
+        <input type="number" id="initialBalance" placeholder="Centavos (ex: 5000 = $50)">
+        <button onclick="createComanda()">2. Criar Comanda</button>
+        
+        <div id="log"></div>
+        
+        <script>
+            let ws;
+            const logDiv = document.getElementById("log");
+            
+            function log(msg, type="info") {
+                const color = type === "error" ? "#ff5555" : (type === "sent" ? "#55ff55" : "#aaaaaa");
+                logDiv.innerHTML += `<div style="color: ${color}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+
+            function connect() {
+                const token = document.getElementById("token").value;
+                ws = new WebSocket(`ws://localhost:8000/ws/admin?token=${token}`);
+                
+                ws.onopen = () => log("Conexão Estabelecida com o Servidor!");
+                
+                ws.onmessage = (event) => {
+                    log(`RECEBIDO do Servidor: ${event.data}`);
+                };
+                
+                ws.onclose = (event) => {
+                    log(`Desconectado (Código: ${event.code})`, "error");
+                };
+            }
+            
+            function disconnect() {
+                if (ws) {
+                    ws.close();
+                }
+            }
+
+            function createComanda() {
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    log("Erro: Conecte-se primeiro!", "error");
+                    return;
+                }
+                
+                const name = document.getElementById("holderName").value;
+                const balance = document.getElementById("initialBalance").value;
+                
+                const payload = {
+                    type: "create_comanda",
+                    holder_name: name,
+                    initial_balance: parseInt(balance)
+                };
+                
+                ws.send(JSON.stringify(payload));
+                log(`ENVIADO: ${JSON.stringify(payload)}`, "sent");
+            }
+        </script>
+    </body>
+</html>
