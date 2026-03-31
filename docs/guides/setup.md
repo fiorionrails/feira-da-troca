@@ -6,8 +6,8 @@ Como rodar o Ouroboros em desenvolvimento ou em um evento real.
 
 ## Pré-requisitos
 
-- Python 3.11+
-- Node.js 18+ (para o frontend de demonstração)
+- Node.js 20+ (backend Node.js e frontend)
+- Python 3.11+ (apenas se usar o backend Python)
 - Git
 
 Nenhum banco de dados externo, nenhum Docker obrigatório.
@@ -25,8 +25,65 @@ cd feira-da-troca
 
 ## 2. Backend
 
+Escolha a opção que preferir — ambas expõem **exatamente a mesma API REST e WebSocket** e usam o mesmo banco SQLite.
+
+---
+
+### Opção A — Node.js (`backend-node/`)
+
 ```bash
-cd backend
+cd backend-node
+
+# Instala dependências
+npm install
+
+# Cria o arquivo de configuração
+cp .env.example .env
+```
+
+Edite o `.env` com os valores do seu ambiente:
+
+```env
+# Segurança
+ADMIN_TOKEN=seu_token_admin_aqui
+SECRET_KEY=chave_secreta_aleatoria
+
+# Banco de dados (padrão é o diretório do backend-node/)
+DATABASE_URL=./ouroboros.db
+
+# Configuração do evento
+EVENT_NAME=Feira da Troca 2025
+MAX_COMANDAS=1000
+PORT=8000
+```
+
+!!! tip "Gerando tokens seguros"
+    ```bash
+    node -e "const c=require('crypto');console.log(c.randomBytes(32).toString('hex'))"
+    ```
+
+## 3. Inicializa o banco (Node.js)
+
+```bash
+npm run db:init
+```
+
+## 4. Sobe o servidor (Node.js)
+
+```bash
+npm start
+```
+
+O servidor estará acessível em `http://localhost:8000`.
+
+Com `0.0.0.0` como host padrão, outros dispositivos na mesma rede WiFi podem acessar via IP da máquina (ex: `http://192.168.1.10:8000`).
+
+---
+
+### Opção B — Python / FastAPI (`backend-python/`)
+
+```bash
+cd backend-python
 
 # Cria e ativa o ambiente virtual
 python -m venv .venv
@@ -65,19 +122,13 @@ MAX_COMANDAS=1000
     python -c "import secrets; print(secrets.token_urlsafe(32))"
     ```
 
----
-
-## 3. Inicializa o banco
+## 3. Inicializa o banco (Python)
 
 ```bash
 python manage.py
 ```
 
-Isso cria o arquivo `ouroboros.db` com o schema completo (tabelas, view e constraints).
-
----
-
-## 4. Sobe o servidor
+## 4. Sobe o servidor (Python)
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -110,7 +161,7 @@ Para produção (servido pelo próprio backend):
 
 ```bash
 npm run build
-# O build vai pra ../backend/static/
+# O build vai pra ../backend-node/static/ ou ../backend-python/static/
 ```
 
 ---
@@ -150,7 +201,8 @@ O servidor roda na máquina do organizador. Os terminais das lojas se conectam v
 ```
 Notebook do organizador
 ├── IP: 192.168.1.10 (exemplo)
-└── roda: uvicorn app.main:app --host 0.0.0.0 --port 8000
+├── Node.js:  cd backend-node && npm start
+└── Python:   uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Terminais das lojas
 └── abrem: http://192.168.1.10:5173 (frontend dev)

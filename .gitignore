@@ -7,3 +7,6 @@ node_modules
 backend-node/ouroboros.db
 backend-node/ouroboros.db-wal
 backend-node/ouroboros.db-shm
+backend-python/ouroboros.db
+backend-python/ouroboros.db-wal
+backend-python/ouroboros.db-shm
