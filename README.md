@@ -9,6 +9,8 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" />
+  <img src="https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white" />
   <img src="https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" />
   <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
   <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
@@ -106,7 +108,7 @@ graph LR
 
 | Componente | Stack | Função |
 |---|---|---|
-| **Servidor** | FastAPI + Uvicorn + SQLite | Processa transações, WebSockets e dados analíticos (ETC puro, sem centavos) |
+| **Servidor** | Node.js + Express + SQLite **ou** Python + FastAPI + SQLite | Processa transações, WebSockets e dados analíticos (ETC puro, sem centavos) |
 | **Terminal Banco** | React + Vite | Dual Mode (Nova comanda / Crédito extra), gestão rápida de lojas |
 | **Terminal Loja** | React + Vite | Busca rápida, proteção dupla e interface focada em tokens simplificados (6 chars) |
 | **Analytics (Telão)** | React + Recharts | Gráficos e kpis atualizados via polling 3s + Live Feed WebSocket |
@@ -125,8 +127,22 @@ graph LR
 
 ### 1. Backend
 
+Escolha a opção que preferir — ambas expõem **exatamente a mesma API REST e WebSocket** e usam o mesmo banco SQLite.
+
+#### Opção A — Node.js (`backend-node/`)
+
 ```bash
-cd backend
+cd backend-node
+npm install
+cp .env.example .env          # configure o ADMIN_TOKEN
+npm run db:init               # cria o banco SQLite
+npm start
+```
+
+#### Opção B — Python / FastAPI (`backend-python/`)
+
+```bash
+cd backend-python
 python -m venv .venv
 
 # Windows
@@ -148,8 +164,6 @@ npm install
 npm run dev
 ```
 
-### 3. Acesse
-
 ### 3. Acesse e Teste
 
 Abra `http://localhost:5173`:
@@ -159,7 +173,7 @@ Abra `http://localhost:5173`:
 3. Crie lojas pelo botão **Gerenciar Lojas**, pegue o **token curto gerado** (ex: `XJ92KF`)
 4. Abra outra aba anônima → Selecione **Loja** → Faça login usando o Token (case-insensitive)
 
-> 💡 **Load Test Incluído**: Quer testar os limites da sua máquina? Rode `python stress_test.py` no backend para simular 5 lojas bombardeando o servidor simultaneamente e assista o Dashboard do Analytics fritar!
+> 💡 **Load Test Incluído**: Quer testar os limites da sua máquina? Rode `python stress_test.py` no `backend-python/` para simular 5 lojas bombardeando o servidor simultaneamente e assista o Dashboard do Analytics fritar!
 
 ---
 
@@ -167,22 +181,36 @@ Abra `http://localhost:5173`:
 
 ```
 feira-da-troca/
-├── backend/
+├── backend-node/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── rest.js           # Rotas REST (categorias, lojas, relatórios)
+│   │   │   ├── wsAdmin.js        # WebSocket do Banco (criar comandas)
+│   │   │   └── wsStore.js        # WebSocket da Loja (débito, consulta)
+│   │   ├── services/
+│   │   │   ├── comandaService.js
+│   │   │   ├── storeService.js
+│   │   │   ├── transactionService.js
+│   │   │   └── productService.js
+│   │   ├── config.js             # Configurações via dotenv (.env)
+│   │   ├── database.js           # Conexão SQLite + PRAGMAs
+│   │   ├── models.js             # Enums e constantes
+│   │   └── app.js                # Express app + WebSocket upgrade
+│   ├── manage.js                 # Script de inicialização do banco
+│   ├── package.json
+│   └── .env.example
+├── backend-python/               # Backend legado (Python/FastAPI)
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── rest.py           # Rotas REST (categorias, lojas, relatórios)
-│   │   │   ├── ws_admin.py       # WebSocket do Banco (criar comandas)
-│   │   │   └── ws_store.py       # WebSocket da Loja (débito, consulta)
+│   │   │   ├── rest.py
+│   │   │   ├── ws_admin.py
+│   │   │   └── ws_store.py
 │   │   ├── services/
-│   │   │   ├── comanda_service.py
-│   │   │   ├── store_service.py
-│   │   │   ├── transaction_service.py
-│   │   │   └── product_service.py
-│   │   ├── config.py             # Pydantic settings (.env)
-│   │   ├── database.py           # Conexão SQLite + PRAGMAs
-│   │   ├── models.py             # Modelos Pydantic (Comanda, Event, Store, Category)
-│   │   └── main.py               # FastAPI app + CORS + routers
-│   ├── manage.py                 # Script de inicialização do banco
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── models.py
+│   │   └── main.py
+│   ├── manage.py
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/
@@ -244,7 +272,8 @@ feira-da-troca/
 ```
 Notebook do organizador (servidor)
 ├── IP: 192.168.1.10
-├── Backend: uvicorn --host 0.0.0.0 --port 8000
+├── Backend Node.js:  cd backend-node && npm start        (porta 8000)
+├── Backend Python:   uvicorn app.main:app --host 0.0.0.0 (porta 8000)
 └── Frontend: npm run build → serve estático
 
 Terminais (qualquer browser na rede WiFi)
@@ -255,7 +284,7 @@ Terminais (qualquer browser na rede WiFi)
 **Checklist pré-evento:**
 - [ ] Notebook com bateria + carregador
 - [ ] `.env` configurado com `ADMIN_TOKEN` forte
-- [ ] Banco inicializado (`python manage.py`)
+- [ ] Banco inicializado (`npm run db:init` no `backend-node/` **ou** `python manage.py` no `backend-python/`)
 - [ ] Lojas criadas e tokens distribuídos
 - [ ] IP anotado e comunicado aos lojistas
 - [ ] Backup do `ouroboros.db` a cada 30 min
