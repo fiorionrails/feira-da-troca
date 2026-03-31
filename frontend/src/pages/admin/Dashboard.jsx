@@ -93,7 +93,7 @@ export default function Dashboard() {
         if (res.ok) {
            const data = await res.json()
            // Forcing price into integer ETC mapping
-           setCategories(data.map(c => ({...c, ETC: Math.floor(c.price / 100)})))
+           setCategories(data.map(c => ({...c, ETC: c.price})))
         }
       } catch (err) {
          console.error("Falha ao puxar categorias do backend", err)
@@ -119,7 +119,7 @@ export default function Dashboard() {
           const res = await fetch('http://localhost:8000/api/categories', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'token': token },
-              body: JSON.stringify({ name: name, price: price * 100 }) // Converter para centavos pro backend DB nativo
+              body: JSON.stringify({ name: name, price: price })
           })
 
           if (res.ok) {
@@ -335,7 +335,7 @@ export default function Dashboard() {
                                 <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>COMANDA ENCONTRADA</p>
                                     <h3 style={{ margin: '4px 0', color: 'var(--accent-primary)' }}>{existingComanda.code} — {existingComanda.holder_name}</h3>
-                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Saldo atual: <strong style={{ color: 'var(--success)' }}>{Math.floor(existingComanda.balance / 100)} ETC</strong></p>
+                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Saldo atual: <strong style={{ color: 'var(--success)' }}>{existingComanda.balance} ETC</strong></p>
                                 </div>
                             )}
                             {existingComanda && existingComanda.error && (

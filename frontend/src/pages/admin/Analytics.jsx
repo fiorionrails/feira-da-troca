@@ -119,9 +119,9 @@ export default function Analytics() {
 
   const kpiCards = [
     { key: 'total_comandas', label: 'Comandas', value: kpis.total_comandas, icon: Users, suffix: '', color: '#10b981' },
-    { key: 'total_emitido', label: 'Total Emitido', value: Math.floor(kpis.total_emitido / 100), icon: TrendingUp, suffix: ' ETC', color: '#34d399' },
-    { key: 'total_gasto', label: 'Total Gasto', value: Math.floor(kpis.total_gasto / 100), icon: ShoppingCart, suffix: ' ETC', color: '#ef4444' },
-    { key: 'total_circulante', label: 'Em Circulação', value: Math.floor(kpis.total_circulante / 100), icon: Coins, suffix: ' ETC', color: '#f59e0b' },
+    { key: 'total_emitido', label: 'Total Emitido', value: kpis.total_emitido, icon: TrendingUp, suffix: ' ETC', color: '#34d399' },
+    { key: 'total_gasto', label: 'Total Gasto', value: kpis.total_gasto, icon: ShoppingCart, suffix: ' ETC', color: '#ef4444' },
+    { key: 'total_circulante', label: 'Em Circulação', value: kpis.total_circulante, icon: Coins, suffix: ' ETC', color: '#f59e0b' },
     { key: 'total_transacoes', label: 'Transações', value: kpis.total_transacoes, icon: Activity, suffix: '', color: '#8b5cf6' },
     { key: 'lojas_ativas', label: 'Lojas', value: kpis.lojas_ativas, icon: Store, suffix: '', color: '#06b6d4' },
   ]
@@ -266,9 +266,9 @@ export default function Analytics() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={top_stores} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickFormatter={v => `${Math.floor(v/100)}`} />
+                    <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickFormatter={v => `${v}`} />
                     <YAxis type="category" dataKey="name" tick={{ fill: '#f8fafc', fontSize: 12 }} axisLine={false} width={120} />
-                    <Tooltip content={<CustomTooltip />} formatter={(v) => [`${Math.floor(v/100)} ETC`, 'Fatur.']} />
+                    <Tooltip content={<CustomTooltip />} formatter={(v) => [`${v} ETC`, 'Fatur.']} />
                     <Bar dataKey="total" name="Faturamento" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -301,7 +301,7 @@ export default function Analytics() {
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginRight: '8px' }}>{evt._ts}</span>
                   {evt.type === 'comanda_created'
                     ? <><strong style={{ color: 'var(--accent-primary)' }}>+{evt.code}</strong> — {evt.holder_name} ({evt.balance} ETC)</>
-                    : <><strong style={{ color: 'var(--danger)' }}>-{Math.floor(evt.amount/100)} ETC</strong> — {evt.comanda_code} na {evt.store_name}</>
+                    : <><strong style={{ color: 'var(--danger)' }}>-{evt.amount} ETC</strong> — {evt.comanda_code} na {evt.store_name}</>
                   }
                 </div>
               ))}

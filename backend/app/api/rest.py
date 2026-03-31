@@ -98,7 +98,9 @@ def create_store(store: StoreCreate, token: str = Depends(verify_admin)):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         new_id = str(uuid.uuid4())
-        terminal_token = f"st_{secrets.token_hex(8)}"
+        # Token mais amigável: 6 caracteres alfanuméricos maiúsculos (ex: XJ92KF)
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" # Removemos 0, O, 1, I para evitar confusão
+        terminal_token = "".join(secrets.choice(alphabet) for _ in range(6))
         cursor.execute(
             "INSERT INTO stores (id, name, theme, terminal_token) VALUES (?, ?, ?, ?)",
             (new_id, store.name, "default", terminal_token)
@@ -120,7 +122,8 @@ def update_store(store_id: str, store: StoreUpdate, token: str = Depends(verify_
 def revoke_store_token(store_id: str, token: str = Depends(verify_admin)):
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        new_token = f"st_{secrets.token_hex(8)}"
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        new_token = "".join(secrets.choice(alphabet) for _ in range(6))
         cursor.execute("UPDATE stores SET terminal_token = ? WHERE id = ?", (new_token, store_id))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Store not found")
@@ -158,7 +161,7 @@ def get_analytics():
         # === Transações por minuto (últimas 2 horas) ===
         cursor.execute("""
             SELECT 
-                strftime('%H:%M', timestamp) as minute,
+                strftime('%H:%M', datetime(timestamp, 'localtime')) as minute,
                 SUM(CASE WHEN type='credit' THEN 1 ELSE 0 END) as credits,
                 SUM(CASE WHEN type='debit' THEN 1 ELSE 0 END) as debits,
                 COUNT(*) as total

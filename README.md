@@ -45,25 +45,34 @@ Substitui moedas físicas (fichas, papelão) por uma camada digital que opera **
 
 ## Demo
 
+> 📸 **Atenção (Nota para o Autor):** Grave e adicione os 4 GIFs abaixo para exibir o potencial completo do sistema.
+
 <!-- GIF 1: Fluxo do Banco criando comanda -->
 <p align="center">
-  <img src="docs/assets/demo-banco.gif" alt="Demo do Banco Central criando comanda" width="720" />
+  <img src="docs/assets/demo-banco.gif" alt="Demo do Banco Central criando comanda e adicionando crédito" width="720" />
   <br>
-  <em>Banco Central — Emissão de comanda com carrinho de avaliação</em>
+  <em>Banco Central — Dual Mode: Emissão de nova comanda e Adição de crédito em existente</em>
 </p>
 
 <!-- GIF 2: Fluxo da Loja debitando -->
 <p align="center">
-  <img src="docs/assets/demo-loja.gif" alt="Demo da Loja debitando comanda" width="720" />
+  <img src="docs/assets/demo-loja.gif" alt="Demo da Loja debitando comanda via Token amigável" width="720" />
   <br>
-  <em>Terminal da Loja — Busca de comanda, carrinho e débito em tempo real</em>
+  <em>Terminal da Loja — Login com token rápido (ex: XJ92KF), busca de comanda e débito</em>
 </p>
 
-<!-- GIF 3: Gestão de Lojas -->
+<!-- GIF 3: Analytics em Tempo Real -->
+<p align="center">
+  <img src="docs/assets/demo-analytics.gif" alt="Demo do Dashboard Analytics público" width="720" />
+  <br>
+  <em>Dashboard Analítico Público — Atualização 100% ao vivo via WebSocket (IDEAL PARA TELÃO)</em>
+</p>
+
+<!-- GIF 4: Gestão de Lojas -->
 <p align="center">
   <img src="docs/assets/demo-lojas-admin.gif" alt="Demo de criação de loja no admin" width="720" />
   <br>
-  <em>Admin — Criação de lojas e gerenciamento de tokens</em>
+  <em>Admin — Criação de lojas instantâneas</em>
 </p>
 
 ---
@@ -97,10 +106,10 @@ graph LR
 
 | Componente | Stack | Função |
 |---|---|---|
-| **Servidor** | FastAPI + Uvicorn + SQLite | Processa transações, event store, broadcast |
-| **Terminal Banco** | React + Vite | Emissão de comandas, carrinho, gestão de lojas |
-| **Terminal Loja** | React + Vite | Busca comanda, carrinho de venda, débito |
-| **Firebase** | Firestore (opcional) | Espelho para consulta do cliente no celular |
+| **Servidor** | FastAPI + Uvicorn + SQLite | Processa transações, WebSockets e dados analíticos (ETC puro, sem centavos) |
+| **Terminal Banco** | React + Vite | Dual Mode (Nova comanda / Crédito extra), gestão rápida de lojas |
+| **Terminal Loja** | React + Vite | Busca rápida, proteção dupla e interface focada em tokens simplificados (6 chars) |
+| **Analytics (Telão)** | React + Recharts | Gráficos e kpis atualizados via polling 3s + Live Feed WebSocket |
 
 ### Decisões de projeto
 
@@ -141,12 +150,16 @@ npm run dev
 
 ### 3. Acesse
 
+### 3. Acesse e Teste
+
 Abra `http://localhost:5173`:
 
-1. Selecione **Banco** → insira o `ADMIN_TOKEN` do `.env`
-2. Crie lojas pelo botão **Gerenciar Lojas** no header
-3. Copie o token de uma loja
-4. Abra outra aba → selecione **Loja** → cole o token
+1. Selecione **Banco** → insira o `ADMIN_TOKEN` configurado no `.env` (case-sensitive)
+2. Acesse a funcionalidade pública **Analytics** pelo rota `http://localhost:5173/analytics` (Ótimo para projetor)
+3. Crie lojas pelo botão **Gerenciar Lojas**, pegue o **token curto gerado** (ex: `XJ92KF`)
+4. Abra outra aba anônima → Selecione **Loja** → Faça login usando o Token (case-insensitive)
+
+> 💡 **Load Test Incluído**: Quer testar os limites da sua máquina? Rode `python stress_test.py` no backend para simular 5 lojas bombardeando o servidor simultaneamente e assista o Dashboard do Analytics fritar!
 
 ---
 

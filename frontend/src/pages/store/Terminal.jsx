@@ -36,7 +36,7 @@ export default function Terminal() {
         const res = await fetch('http://localhost:8000/api/categories')
         if (res.ok) {
            const data = await res.json()
-           setCategories(data.map(c => ({...c, ETC: Math.floor(c.price / 100)})))
+           setCategories(data.map(c => ({...c, ETC: c.price})))
         }
       } catch (err) {
          console.error("Falha ao puxar categorias do backend", err)

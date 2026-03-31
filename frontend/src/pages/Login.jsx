@@ -52,11 +52,11 @@ export default function Login() {
             CHAVE DE ACESSO ({role.toUpperCase()})
           </label>
           <input 
-            type="password" 
+            type={role === 'admin' ? 'password' : 'text'} 
             className="input-premium"
-            placeholder="Digite o token recebido..."
+            placeholder={role === 'admin' ? 'Digite a senha do mestre...' : 'Ex: XJ92KF'}
             value={token}
-            onChange={(e) => setToken(e.target.value)}
+            onChange={(e) => setToken(role === 'admin' ? e.target.value : e.target.value.toUpperCase())}
             required
             autoFocus
           />
