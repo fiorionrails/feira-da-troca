@@ -1,13 +1,13 @@
 # Referência da API
 
-A API REST do Ouroboros é construída com FastAPI e exposta na porta `8000`. A documentação interativa está disponível em `/docs` (Swagger UI) e `/redoc` (ReDoc) quando o servidor está rodando.
+A API do Ouroboros é construída com FastAPI e exposta na porta `8000`. A documentação interativa está disponível em `/docs` (Swagger UI) e `/redoc` (ReDoc) quando o servidor está rodando.
 
 ---
 
 ## Base URL
 
 ```
-http://localhost:8000/api/v1
+http://localhost:8000/api
 ```
 
 Em produção (rede local do evento), substituir `localhost` pelo IP da máquina servidora.
@@ -16,139 +16,170 @@ Em produção (rede local do evento), substituir `localhost` pelo IP da máquina
 
 ## Autenticação
 
-A API usa dois níveis de autenticação:
+A API usa dois mecanismos de autenticação dependendo do canal:
 
-| Nível | Header | Usado por |
-|---|---|---|
-| Admin | `Authorization: Bearer <admin_token>` | Painel administrativo |
-| Store | `Authorization: Bearer <store_token>` | Terminais de loja |
+### REST (HTTP)
 
-Os tokens são gerados no setup inicial e armazenados no `.env`.
+As rotas administrativas exigem o header customizado `token`:
 
-!!! note
-    WebSocket endpoints usam autenticação via query string: `ws://host/ws?token=<store_token>`
+```
+token: <admin_token>
+```
+
+O valor do token é definido pela variável `ADMIN_TOKEN` no arquivo `.env`.
+
+!!! note "Rotas públicas"
+    A rota `GET /api/categories` é pública e não exige token — isso permite que os terminais de loja consultem o catálogo de preços.
+
+### WebSocket
+
+A autenticação é feita via query string na conexão:
+
+```
+ws://host/ws/admin?token=<admin_token>
+ws://host/ws/store?token=<store_terminal_token>
+```
 
 ---
 
-## Comandas
+## Rotas REST
 
-### `POST /comandas`
+### Relatórios
 
-Cria uma nova comanda e emite o saldo inicial.
+#### `GET /api/reports/economy_state`
+
+Retorna a visão macro da economia da feira.
+
+**Auth:** Admin (`token` header)
+
+**Response `200`:**
+```json
+{
+  "total_issued": 486000,
+  "total_circulating": 173500,
+  "comandas_active": 243,
+  "stores_registered": 12
+}
+```
+
+| Campo | Descrição |
+|---|---|
+| `total_issued` | Soma de todos os créditos iniciais emitidos |
+| `total_circulating` | Soma dos saldos atuais de todas as comandas |
+| `comandas_active` | Total de comandas cadastradas |
+| `stores_registered` | Total de lojas cadastradas |
+
+---
+
+### Lojas
+
+#### `GET /api/stores`
+
+Lista todas as lojas cadastradas.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+[
+  {
+    "id": "uuid-da-loja",
+    "name": "Cantina Italiana",
+    "theme": "default",
+    "terminal_token": "st_a8bf9x2e1c4d7f90"
+  }
+]
+```
+
+#### `POST /api/stores`
+
+Cria uma nova loja com token de terminal gerado automaticamente.
 
 **Auth:** Admin
 
 **Request body:**
 ```json
 {
-  "holder_name": "João Silva",
-  "initial_balance": 2000
+  "name": "Cantina Italiana"
 }
 ```
-
-| Campo | Tipo | Descrição |
-|---|---|---|
-| `holder_name` | string | Nome do portador da comanda |
-| `initial_balance` | integer | Saldo inicial em centavos fictícios |
-
-**Response `201`:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "holder_name": "João Silva",
-  "code": "F104",
-  "balance": 2000,
-  "created_at": "2024-11-15T09:00:00Z"
-}
-```
-
----
-
-### `GET /comandas/{comanda_id}`
-
-Retorna detalhes e saldo atual de uma comanda.
-
-**Auth:** Admin ou Store
 
 **Response `200`:**
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "holder_name": "João Silva",
-  "balance": 1350,
-  "created_at": "2024-11-15T09:00:00Z"
+  "id": "uuid-gerado",
+  "name": "Cantina Italiana",
+  "terminal_token": "st_a8bf9x2e1c4d7f90"
 }
 ```
 
-**Response `404`:**
-```json
-{
-  "error": "comanda_not_found",
-  "message": "Comanda não encontrada"
-}
-```
+#### `PUT /api/stores/{store_id}`
 
----
-
-### `GET /comandas/{comanda_id}/events`
-
-Lista todos os eventos (transações) de uma comanda em ordem cronológica.
-
-**Auth:** Admin
-
-**Response `200`:**
-```json
-{
-  "comanda_id": "550e8400-...",
-  "holder_name": "João Silva",
-  "events": [
-    {
-      "id": "evt_001",
-      "type": "credit",
-      "amount": 2000,
-      "store_id": null,
-      "note": "Saldo inicial",
-      "created_at": "2024-11-15T09:00:00Z"
-    },
-    {
-      "id": "evt_002",
-      "type": "debit",
-      "amount": 650,
-      "store_id": "store_loja_italiana",
-      "note": null,
-      "created_at": "2024-11-15T10:23:15Z"
-    }
-  ],
-  "current_balance": 1350
-}
-```
-
----
-
-## Transações (Admin)
-
-### `POST /transactions/credit`
-
-Credita manualmente uma comanda (operação administrativa, ex: reembolso).
+Atualiza o nome de uma loja existente.
 
 **Auth:** Admin
 
 **Request body:**
 ```json
 {
-  "comanda_id": "550e8400-...",
-  "amount": 300,
-  "note": "Reembolso - produto indisponível"
+  "name": "Novo Nome da Loja"
 }
 ```
 
-**Response `201`:**
+#### `POST /api/stores/{store_id}/revoke_token`
+
+Gera um novo token para a loja, invalidando o anterior imediatamente. Qualquer terminal usando o token antigo perde acesso ao tentar reconectar.
+
+**Auth:** Admin
+
+**Response `200`:**
 ```json
 {
-  "event_id": "evt_003",
-  "type": "credit",
-  "amount": 300,
-  "new_balance": 1650
+  "id": "uuid-da-loja",
+  "new_token": "st_novo_token_gerado"
+}
+```
+
+!!! warning "Efeito da revogação"
+    Ao regerar o token, qualquer terminal de loja usando o token antigo será desconectado na próxima tentativa de reconexão. O novo token deve ser informado ao lojista para que ele possa acessar novamente.
+
+---
+
+### Categorias
+
+#### `GET /api/categories`
+
+Lista todas as categorias de produto cadastradas com seus preços.
+
+**Auth:** Pública (nenhum token necessário)
+
+**Response `200`:**
+```json
+[
+  {
+    "id": "uuid-categoria",
+    "name": "Jaqueta",
+    "price": 1500,
+    "total_entries": 42,
+    "total_exits": 18
+  }
+]
+```
+
+!!! note "Unidade de preço"
+    O campo `price` é armazenado em centavos fictícios. O frontend converte para ETECOINS dividindo por 100 (ex: `1500` → `15 ETC`).
+
+#### `POST /api/categories`
+
+Cria uma nova categoria de produto/preço.
+
+**Auth:** Admin
+
+**Request body:**
+```json
+{
+  "name": "Bolsa",
+  "price": 1500
 }
 ```
 
@@ -161,23 +192,46 @@ O canal principal de operação das lojas. Cada terminal mantém uma conexão We
 ### Conexão
 
 ```
-ws://localhost:8000/ws/store?token=<store_token>
+ws://localhost:8000/ws/store?token=<store_terminal_token>
 ```
 
-Após conectar, o servidor envia o estado atual:
+Após conectar, o servidor envia:
 
 ```json
 {
   "type": "connected",
-  "store_id": "store_loja_italiana",
+  "store_id": "uuid-da-loja",
   "store_name": "Cantina Italiana",
-  "server_time": "2024-11-15T10:00:00Z"
+  "server_time": "2025-11-15T10:00:00Z"
 }
 ```
+
+Se o token for inválido, o servidor fecha a conexão com código `1008` e motivo `"Store Token Unauthorized"`.
 
 ---
 
 ### Mensagens do Terminal → Servidor
+
+#### `balance_query`
+
+Consulta o saldo de uma comanda sem realizar débito.
+
+```json
+{
+  "type": "balance_query",
+  "comanda_code": "F001"
+}
+```
+
+**Resposta:**
+```json
+{
+  "type": "balance_response",
+  "comanda_code": "F001",
+  "holder_name": "João Silva",
+  "balance": 1350
+}
+```
 
 #### `debit_request`
 
@@ -186,7 +240,7 @@ Solicita um débito em uma comanda.
 ```json
 {
   "type": "debit_request",
-  "comanda_code": "F104",
+  "comanda_code": "F001",
   "amount": 650
 }
 ```
@@ -197,11 +251,11 @@ Solicita um débito em uma comanda.
 ```json
 {
   "type": "debit_confirmed",
-  "event_id": "evt_004",
-  "comanda_id": "550e8400-...",
+  "event_id": "uuid-evento",
+  "comanda_code": "F001",
+  "holder_name": "João Silva",
   "amount": 650,
-  "new_balance": 700,
-  "holder_name": "João Silva"
+  "new_balance": 700
 }
 ```
 
@@ -215,36 +269,50 @@ Solicita um débito em uma comanda.
 }
 ```
 
-#### `balance_query`
+Motivos possíveis de rejeição: `comanda_not_found`, `insufficient_balance`, `invalid_amount`.
 
-Consulta o saldo de uma comanda sem realizar débito (para exibir ao cliente antes de confirmar).
+---
+
+### Mensagens do Servidor → Todos os Terminais (broadcast)
+
+#### `balance_updated`
+
+Disparado após qualquer débito confirmado no sistema. Permite que outros terminais que estejam visualizando a mesma comanda atualizem o saldo em tempo real.
 
 ```json
 {
-  "type": "balance_query",
-  "comanda_code": "F104"
+  "type": "balance_updated",
+  "comanda_code": "F001",
+  "new_balance": 700,
+  "event_type": "debit",
+  "store_id": "uuid-da-loja-que-debitou"
 }
 ```
 
-**Resposta:**
-```json
-{
-  "type": "balance_response",
-  "comanda_id": "550e8400-...",
-  "holder_name": "João Silva",
-  "balance": 1350
-}
-```
+---
 
 ## WebSocket — Administração e Banco
 
-Interface para operadores do Banco e Administradores. Mantém sincronia entre os múltiplos terminais de cadastro.
+Interface para operadores do Banco e Administradores.
 
 ### Conexão
 
 ```
 ws://localhost:8000/ws/admin?token=<admin_token>
 ```
+
+Após conectar:
+```json
+{
+  "type": "connected",
+  "role": "admin",
+  "next_code": "F001"
+}
+```
+
+Se o token for inválido, o servidor fecha a conexão com código `1008`.
+
+---
 
 ### Mensagens do Admin → Servidor
 
@@ -273,16 +341,18 @@ Cadastra ou atualiza uma categoria/preço de produto.
 }
 ```
 
+---
+
 ### Mensagens do Servidor → Admin (broadcast)
 
 #### `comanda_created`
 
-Confirmado para todos os admins quando uma nova comanda é gerada.
+Notifica todos os terminais Admin quando uma nova comanda é gerada.
 
 ```json
 {
   "type": "comanda_created",
-  "code": "F105",
+  "code": "F001",
   "holder_name": "Maria Oliveira",
   "balance": 5000
 }
@@ -290,56 +360,43 @@ Confirmado para todos os admins quando uma nova comanda é gerada.
 
 #### `update_next_code`
 
-Informa aos terminais qual será o próximo código `Fxxx` disponível, evitando conflitos de entrada manual.
+Sincroniza entre os terminais qual será o próximo código `Fxxx` disponível.
 
 ```json
 {
   "type": "update_next_code",
-  "next_code": "F106"
+  "next_code": "F002"
 }
 ```
 
----
+#### `admin_balance_updated`
 
-### Mensagens do Servidor → Terminal (broadcast)
-
-Mensagens enviadas a todos os terminais conectados quando eventos ocorrem.
-
-#### `balance_updated`
-
-Disparado após qualquer transação confirmada no sistema.
+Disparado quando uma loja efetua um débito, para o painel Admin acompanhar a economia em tempo real.
 
 ```json
 {
-  "type": "balance_updated",
-  "comanda_code": "F104",
+  "type": "admin_balance_updated",
+  "comanda_code": "F001",
   "new_balance": 700,
-  "event_type": "debit",
-  "store_id": "store_loja_italiana"
+  "amount": 650,
+  "store_name": "Cantina Italiana"
 }
 ```
 
----
+#### `category_updated`
 
-## Admin — Visão geral
+Notifica quando uma categoria de produto é criada ou atualizada.
 
-### `GET /admin/overview`
-
-Retorna o estado atual da economia do evento.
-
-**Auth:** Admin
-
-**Response `200`:**
 ```json
 {
-  "total_comandas": 243,
-  "total_credits_issued": 486000,
-  "total_debits": 312500,
-  "total_in_circulation": 173500,
-  "active_stores": 12,
-  "connected_terminals": 10,
-  "events_pending_sync": 3,
-  "last_transaction_at": "2024-11-15T11:47:32Z"
+  "type": "category_updated",
+  "category": {
+    "id": "uuid",
+    "name": "Bolsa",
+    "price": 1500,
+    "total_entries": 10,
+    "total_exits": 0
+  }
 }
 ```
 
@@ -349,8 +406,7 @@ Retorna o estado atual da economia do evento.
 
 | Código | Significado |
 |---|---|
-| `comanda_not_found` | ID/Código não existe no sistema |
+| `comanda_not_found` | Código da comanda não existe no sistema |
 | `insufficient_balance` | Saldo insuficiente para o débito |
 | `invalid_amount` | Valor inválido (zero, negativo, ou não-inteiro) |
-| `store_not_found` | Store token não reconhecido |
-| `unauthorized` | Token ausente ou inválido |
+| `unauthorized` | Token ausente ou inválido (WebSocket fecha com código 1008) |

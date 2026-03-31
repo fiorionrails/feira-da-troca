@@ -125,20 +125,19 @@ sequenceDiagram
     Note over WS: conexão cai (WiFi, etc.)
     
     WS->>WS: detecta disconnect
-    WS->>WS: aguarda 2s (backoff)
+    WS->>WS: aguarda 2s (backoff fixo)
     WS->>API: WS reconnect
-    API-->>WS: connected {session_id}
-    API-->>WS: missed_events[] (eventos ocorridos durante a desconexão)
-    WS->>WS: aplica missed_events no estado local
+    API-->>WS: connected {estado atual}
     
-    Note over WS: terminal volta ao estado correto
+    Note over WS: terminal volta ao estado inicial da sessão
 ```
 
 **Pontos de atenção:**
 
-- O frontend implementa reconnect automático com exponential backoff
-- O servidor guarda os últimos N eventos da sessão para enviar no reconnect
-- Nenhuma transação é perdida — o event store é a fonte da verdade
+- O frontend implementa reconnect automático com backoff fixo (2–3 segundos)
+- Ao reconectar, o terminal recebe o estado atual (info da loja ou próximo código de comanda), e pode continuar operando normalmente
+- Nenhuma transação é perdida no servidor — o event store é a fonte da verdade
+- Transações pendentes no terminal durante a desconexão **não são processadas** — o lojista deve refazer a operação após a reconexão
 
 ---
 

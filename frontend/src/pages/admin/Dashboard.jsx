@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { TerminalSquare, ShieldAlert, Plus, Coins, Zap, LogOut, ShoppingCart, X, Minus } from 'lucide-react'
+import { TerminalSquare, ShieldAlert, Plus, Coins, Zap, LogOut, ShoppingCart, X, Minus, Store, RefreshCw, Copy, Check, Activity } from 'lucide-react'
 import { useAdminWebSocket } from '../../hooks/useAdminWebSocket'
 import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { isConnected, nextCode, recentComandas, economyStream, createComanda } = useAdminWebSocket()
+  const { isConnected, nextCode, recentComandas, economyStream, createComanda, addCredit } = useAdminWebSocket()
   
   const [holderName, setHolderName] = useState('')
+  const [mode, setMode] = useState('new') // 'new' | 'existing'
+  const [comandaCode, setComandaCode] = useState('')
+  const [existingComanda, setExistingComanda] = useState(null)
+  const [loadingComanda, setLoadingComanda] = useState(false)
   
   // Cart State System
   const [categories, setCategories] = useState([])
@@ -16,6 +20,67 @@ export default function Dashboard() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   
   const searchInputRef = useRef(null)
+
+  // Store Management State
+  const [showStoreModal, setShowStoreModal] = useState(false)
+  const [storeList, setStoreList] = useState([])
+  const [newStoreName, setNewStoreName] = useState('')
+  const [copiedToken, setCopiedToken] = useState(null)
+
+  const fetchStores = async () => {
+      try {
+          const token = sessionStorage.getItem('ouroboros_token')
+          const res = await fetch('http://localhost:8000/api/stores', { headers: { 'token': token } })
+          if (res.ok) setStoreList(await res.json())
+      } catch (e) {
+          console.error(e)
+      }
+  }
+
+  useEffect(() => {
+      if (showStoreModal) fetchStores()
+  }, [showStoreModal])
+
+  const handleCreateStore = async (e) => {
+      e.preventDefault()
+      if (!newStoreName.trim()) return
+      try {
+          const token = sessionStorage.getItem('ouroboros_token')
+          const res = await fetch('http://localhost:8000/api/stores', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'token': token },
+              body: JSON.stringify({ name: newStoreName })
+          })
+          if (res.ok) {
+              setNewStoreName('')
+              fetchStores()
+          }
+      } catch (e) {
+          console.error(e)
+      }
+  }
+
+  const handleRevokeToken = async (storeId) => {
+      if (!window.confirm("Isso desconectará a loja imediatamente e exigirá a inserção do novo token. Confirmar?")) return
+      
+      try {
+          const token = sessionStorage.getItem('ouroboros_token')
+          const res = await fetch(`http://localhost:8000/api/stores/${storeId}/revoke_token`, {
+              method: 'POST',
+              headers: { 'token': token }
+          })
+          if (res.ok) fetchStores()
+      } catch (e) {
+          console.error(e)
+      }
+  }
+
+  const handleCopyHash = (tokenStr) => {
+      navigator.clipboard.writeText(tokenStr)
+      setCopiedToken(tokenStr)
+      setTimeout(() => setCopiedToken(null), 2000)
+  }
+
 
   // Fetch categories on mount
   useEffect(() => {
@@ -106,11 +171,43 @@ export default function Dashboard() {
   const handleCreate = (e) => {
     e.preventDefault()
     if (holderName.trim() && cartTotal > 0) {
-      createComanda(holderName, cartTotal) // manda como ETC pra gerar saldo, a api espera cents entao no backend temos que ver, mas nosso teste_api manda os inteiros de boa já ou não? 
-      // Espera aí, no admin/WS a gente mudou o admin pra exibir `initial_balance` direto ou mandar certinho? Vamos resolver lá. O front envia ETC limpo agora.
+      const cartItems = cart.map(item => ({ name: item.name, quantity: item.quantity }))
+      createComanda(holderName, cartTotal, cartItems)
       setHolderName('')
       setCart([])
     }
+  }
+
+  const handleAddCreditSubmit = (e) => {
+    e.preventDefault()
+    if (existingComanda && cartTotal > 0) {
+      const cartItems = cart.map(item => ({ name: item.name, quantity: item.quantity }))
+      addCredit(existingComanda.code, cartTotal, cartItems)
+      setCart([])
+      setComandaCode('')
+      setExistingComanda(null)
+    }
+  }
+
+  const searchComanda = async () => {
+    if (!comandaCode.trim()) return
+    setLoadingComanda(true)
+    setExistingComanda(null)
+    try {
+      const token = sessionStorage.getItem('ouroboros_token')
+      // Use the store WS balance query approach but via a simple REST-like fetch
+      // Actually, let's query via a quick WebSocket-style approach. Simpler: query the DB via the existing balance_view
+      const res = await fetch(`http://localhost:8000/api/comanda/${comandaCode.toUpperCase()}`, { headers: { 'token': token } })
+      if (res.ok) {
+        const data = await res.json()
+        setExistingComanda(data)
+      } else {
+        setExistingComanda({ error: 'Comanda não encontrada' })
+      }
+    } catch (e) {
+      setExistingComanda({ error: 'Erro de conexão' })
+    }
+    setLoadingComanda(false)
   }
 
   return (
@@ -128,6 +225,23 @@ export default function Dashboard() {
             </div>
             
             <button 
+                onClick={() => setShowStoreModal(true)} 
+                className="btn btn-outline" 
+                style={{ padding: '6px 12px', fontSize: '0.8rem', gap: '6px', borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }}
+                title="Sair do Terminal"
+            >
+                <Store size={16} /> Gerenciar Lojas
+            </button>
+
+            <button 
+                onClick={() => navigate('/analytics')} 
+                className="btn btn-outline" 
+                style={{ padding: '6px 12px', fontSize: '0.8rem', gap: '6px', borderColor: '#8b5cf6', color: '#8b5cf6' }}
+            >
+                <Activity size={16} /> Analytics
+            </button>
+
+            <button 
                 onClick={() => { sessionStorage.removeItem('ouroboros_token'); navigate('/'); }} 
                 className="btn btn-outline" 
                 style={{ padding: '6px 12px', fontSize: '0.8rem', gap: '4px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
@@ -141,41 +255,108 @@ export default function Dashboard() {
       {/* Main Grid: Mudei para 3 colunas, a do meio virou o Cart */}
       <main style={{ flex: 1, padding: '32px', display: 'grid', gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(350px, 1fr) 1fr', gap: '32px' }}>
         
-        {/* Coluna 1: Comanda Gen e Input Name */}
+        {/* Coluna 1: Comanda — Nova ou Existente */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div className="glass-panel animate-fade-in" style={{ padding: '32px', border: '2px solid rgba(16, 185, 129, 0.2)' }}>
-                <div style={{ marginBottom: '24px' }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>PRÓXIMA COMANDA DISPONÍVEL</p>
-                    <h1 style={{ fontSize: '3.5rem', margin: 0, color: 'var(--text-main)', letterSpacing: '2px' }}>{nextCode}</h1>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--accent-primary)' }}>*Sincronizado entre caixas do Banco</p>
+                
+                {/* Toggle Mode */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                    <button 
+                        type="button"
+                        className={`btn ${mode === 'new' ? '' : 'btn-outline'}`}
+                        style={{ flex: 1, padding: '10px', fontSize: '0.85rem' }}
+                        onClick={() => { setMode('new'); setExistingComanda(null); setComandaCode(''); }}
+                    >
+                        <Plus size={16} /> Nova Comanda
+                    </button>
+                    <button 
+                        type="button"
+                        className={`btn ${mode === 'existing' ? '' : 'btn-outline'}`}
+                        style={{ flex: 1, padding: '10px', fontSize: '0.85rem' }}
+                        onClick={() => { setMode('existing'); setHolderName(''); }}
+                    >
+                        <Coins size={16} /> Adicionar Crédito
+                    </button>
                 </div>
 
-                <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }}>NOME DO ESTUDANTE</label>
-                        <input 
-                            type="text" 
-                            className="input-premium"
-                            placeholder="Nome do aluno / equipe..."
-                            value={holderName}
-                            onChange={(e) => setHolderName(e.target.value)}
-                            required
-                        />
-                    </div>
-                    
-                    {/* Sum of Cart */}
-                    <div style={{ marginTop: '16px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', textAlign: 'center' }}>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '1px' }}>A DEPOSITAR</p>
-                        <h2 style={{ fontSize: '2.5rem', margin: '8px 0', color: cartTotal > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                            {cartTotal} ETC
-                        </h2>
-                    </div>
+                {mode === 'new' ? (
+                    <>
+                        <div style={{ marginBottom: '24px' }}>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>PRÓXIMA COMANDA DISPONÍVEL</p>
+                            <h1 style={{ fontSize: '3.5rem', margin: 0, color: 'var(--text-main)', letterSpacing: '2px' }}>{nextCode}</h1>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--accent-primary)' }}>*Sincronizado entre caixas do Banco</p>
+                        </div>
+                        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }}>NOME DO ESTUDANTE</label>
+                                <input 
+                                    type="text" 
+                                    className="input-premium"
+                                    placeholder="Nome do aluno / equipe..."
+                                    value={holderName}
+                                    onChange={(e) => setHolderName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div style={{ marginTop: '16px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', textAlign: 'center' }}>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '1px' }}>A DEPOSITAR</p>
+                                <h2 style={{ fontSize: '2.5rem', margin: '8px 0', color: cartTotal > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                                    {cartTotal} ETC
+                                </h2>
+                            </div>
+                            <button type="submit" className="btn btn-success" disabled={cartTotal === 0 || !holderName} style={{ marginTop: '8px', opacity: (cartTotal === 0 || !holderName) ? 0.5 : 1 }}>
+                                <Plus size={18} /> EMITIR COMANDA DE CRÉDITO
+                            </button>
+                            {cartTotal === 0 && <p style={{fontSize:'0.8rem', color:'var(--danger)', textAlign:'center'}}>Adicione itens no carrinho para depositar.</p>}
+                        </form>
+                    </>
+                ) : (
+                    <>
+                        <form onSubmit={handleAddCreditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }}>CÓDIGO DA COMANDA</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input 
+                                        type="text" 
+                                        className="input-premium"
+                                        placeholder="F001, F002..."
+                                        value={comandaCode}
+                                        onChange={(e) => setComandaCode(e.target.value.toUpperCase())}
+                                        style={{ flex: 1, textTransform: 'uppercase', fontWeight: 700, fontSize: '1.2rem', letterSpacing: '2px' }}
+                                    />
+                                    <button type="button" className="btn" onClick={searchComanda} disabled={!comandaCode.trim() || loadingComanda} style={{ whiteSpace: 'nowrap' }}>
+                                        {loadingComanda ? '...' : 'Buscar'}
+                                    </button>
+                                </div>
+                            </div>
 
-                    <button type="submit" className="btn btn-success" disabled={cartTotal === 0 || !holderName} style={{ marginTop: '8px', opacity: (cartTotal === 0 || !holderName) ? 0.5 : 1 }}>
-                        <Plus size={18} /> EMITIR COMANDA DE CRÉDITO
-                    </button>
-                    {cartTotal === 0 && <p style={{fontSize:'0.8rem', color:'var(--danger)', textAlign:'center'}}>Adicione itens no carrinho para depositar.</p>}
-                </form>
+                            {/* Resultado da Busca */}
+                            {existingComanda && !existingComanda.error && (
+                                <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>COMANDA ENCONTRADA</p>
+                                    <h3 style={{ margin: '4px 0', color: 'var(--accent-primary)' }}>{existingComanda.code} — {existingComanda.holder_name}</h3>
+                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Saldo atual: <strong style={{ color: 'var(--success)' }}>{Math.floor(existingComanda.balance / 100)} ETC</strong></p>
+                                </div>
+                            )}
+                            {existingComanda && existingComanda.error && (
+                                <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)', color: 'var(--danger)', fontSize: '0.9rem' }}>
+                                    {existingComanda.error}
+                                </div>
+                            )}
+
+                            <div style={{ marginTop: '8px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', textAlign: 'center' }}>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '1px' }}>A ADICIONAR</p>
+                                <h2 style={{ fontSize: '2.5rem', margin: '8px 0', color: cartTotal > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                                    +{cartTotal} ETC
+                                </h2>
+                            </div>
+                            <button type="submit" className="btn btn-success" disabled={cartTotal === 0 || !existingComanda || existingComanda.error} style={{ marginTop: '8px', opacity: (cartTotal === 0 || !existingComanda || existingComanda.error) ? 0.5 : 1 }}>
+                                <Coins size={18} /> ADICIONAR CRÉDITO
+                            </button>
+                            {cartTotal === 0 && <p style={{fontSize:'0.8rem', color:'var(--danger)', textAlign:'center'}}>Adicione itens no carrinho.</p>}
+                        </form>
+                    </>
+                )}
             </div>
         </div>
 
@@ -297,6 +478,79 @@ export default function Dashboard() {
         </div>
 
       </main>
+
+      {/* MODAL DE LOJAS */}
+      {showStoreModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="glass-panel animate-fade-in" style={{ width: '90%', maxWidth: '800px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
+                <div style={{ padding: '24px', borderBottom: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: 0 }}>
+                        <Store size={24} color="var(--accent-primary)"/> Gestão do Comércio Local
+                    </h2>
+                    <button onClick={() => setShowStoreModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }}><X size={24}/></button>
+                </div>
+                
+                <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px', overflowY: 'auto' }}>
+                    
+                    {/* Add Store Form */}
+                    <form onSubmit={handleCreateStore} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', background: 'rgba(16,185,129,0.05)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.2)' }}>
+                        <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }}>NOME DA NOVA LOJA</label>
+                            <input 
+                                type="text"
+                                className="input-premium"
+                                placeholder="Ex: Cantina do João, Sala do 3ºB..."
+                                value={newStoreName}
+                                onChange={e => setNewStoreName(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <button type="submit" className="btn btn-success" style={{ height: '48px' }}>
+                            <Plus size={18}/> CADASTRAR 
+                        </button>
+                    </form>
+
+                    {/* Store List */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>LOJAS ATIVAS ({storeList.length})</h3>
+                        {storeList.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Nenhuma loja cadastrada.</p>}
+                        
+                        {storeList.map(store => (
+                            <div key={store.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
+                                <div>
+                                    <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem' }}>{store.name}</h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <code style={{ background: 'rgba(0,0,0,0.5)', padding: '6px 12px', borderRadius: '4px', fontSize: '0.9rem', color: 'var(--accent-primary)' }}>
+                                            {store.terminal_token}
+                                        </code>
+                                        <button 
+                                            onClick={() => handleCopyHash(store.terminal_token)}
+                                            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Copiar Token"
+                                        >
+                                            {copiedToken === store.terminal_token ? <Check size={18} color="var(--success)"/> : <Copy size={18}/>}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <button 
+                                        onClick={() => handleRevokeToken(store.id)}
+                                        className="btn btn-outline"
+                                        style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                                    >
+                                        <RefreshCw size={16}/> Regerar Token
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                </div>
+            </div>
+        </div>
+      )}
+
     </div>
   )
 }

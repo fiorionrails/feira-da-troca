@@ -37,9 +37,12 @@ graph LR
 
 - **Servidor principal** roda na rede local do evento (um notebook é suficiente)
 - **Terminais** (Lojas e Banco) são qualquer browser na mesma rede — tablet, celular, notebook
-- **Banco (Sub-admin)** é o perfil de usuário responsável pela entrada: onde novos produtos são cadastrados, comandas são criadas e o saldo inicial é inserido no sistema
+- **Banco (Admin)** é o perfil de usuário responsável pela gestão: cadastro de categorias/preços, emissão de comandas, gestão de lojas (criar/revogar tokens)
+- **Loja** é o perfil de usuário que consulta comandas e debita ETECOINS via carrinho de vendas
 - **Firebase** recebe eventos já confirmados, apenas para consulta do cliente
 - **Nenhuma transação depende de internet**
+
+> **Nota sobre o frontend:** O frontend React incluído é uma **interface de demonstração funcional**. Ele implementa todos os fluxos do sistema mas foi construído de forma básica — a interface pode ser livremente redesenhada, customizada ou substituída por qualquer outra tecnologia. O backend (API REST + WebSocket) é a camada estável e documentada do projeto.
 
 ---
 

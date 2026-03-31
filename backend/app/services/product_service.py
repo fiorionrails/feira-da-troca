@@ -16,10 +16,16 @@ def create_or_update_category(conn, name: str, price: int, initial_entries: int 
     existing = get_category_by_name(conn, name)
     
     if existing:
-        cursor.execute(
-            "UPDATE categories SET price = ?, total_entries = total_entries + ? WHERE id = ?",
-            (price, initial_entries, existing.id)
-        )
+        if price > 0:
+            cursor.execute(
+                "UPDATE categories SET price = ?, total_entries = total_entries + ? WHERE id = ?",
+                (price, initial_entries, existing.id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE categories SET total_entries = total_entries + ? WHERE id = ?",
+                (initial_entries, existing.id)
+            )
         conn.commit()
         return get_category_by_name(conn, name)
     else:

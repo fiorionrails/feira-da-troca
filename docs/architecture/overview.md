@@ -43,7 +43,7 @@ Qualquer dispositivo com browser conectado à rede local. Sem instalação.
 - Receber confirmação em tempo real
 - Exibir histórico de transações da sessão
 
-**Stack:** React + Vite (servido pelo próprio servidor)
+**Stack:** React + Vite (interface de demonstração — pode ser substituída)
 
 ### Interface de Administração e Operação (Admin & Banco)
 
@@ -51,9 +51,12 @@ Interface de gestão para organizadores e sub-administradores (operadores do Ban
 
 **Responsabilidades:**
 
-- **Admin Principal:** Controle total, gestão de lojas, tokens e visão macro da economia.
-- **Banco (Sub-admin):** Cadastro de novos produtos/categorias, emissão de comandas com saldo inicial e auditoria operacional local.
-- Visualização do estado geral da economia e exportação de transações.
+- **Admin Principal:** Controle total, gestão de lojas (criar/revogar tokens), visão macro da economia.
+- **Banco (Operador):** Cadastro de novos produtos/categorias, emissão de comandas com saldo inicial (carrinho de avaliação).
+- Visualização do estado geral da economia.
+
+!!! note "Sobre o frontend"
+    O frontend React incluído é uma **interface de demonstração básica**. Implementa todos os fluxos (login, emissão de comandas, carrinho de vendas, débito, gestão de lojas) mas foi construído com foco em funcionalidade, não em design final. A interface pode ser livremente redesenhada, customizada ou substituída por qualquer tecnologia frontend — o backend (API REST + WebSocket) é a camada estável.
 
 ### Firebase Firestore (camada de leitura)
 

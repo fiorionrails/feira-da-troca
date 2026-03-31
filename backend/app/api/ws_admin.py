@@ -5,7 +5,8 @@ import logging
 
 from app.database import get_db_connection
 from app.config import settings
-from app.services.comanda_service import create_comanda, get_next_code
+from app.services.comanda_service import create_comanda, get_next_code, get_comanda_by_code, get_balance
+from app.services.transaction_service import process_credit
 from app.services.product_service import create_or_update_category
 
 router = APIRouter()
@@ -68,10 +69,18 @@ async def websocket_admin(websocket: WebSocket, token: str):
             if msg_type == "create_comanda":
                 holder_name = data.get("holder_name")
                 initial_balance = int(data.get("initial_balance", 0))
+                cart_items = data.get("cart_items", [])
                 
                 with get_db_connection() as conn:
                     # Gera a criar comanda (o code gerado será Fxxx)
                     comanda, event_id = create_comanda(conn, holder_name, initial_balance)
+                    
+                    # Incrementa total_entries de cada categoria usada no carrinho
+                    for item in cart_items:
+                        item_name = item.get("name", "")
+                        item_qty = int(item.get("quantity", 0))
+                        if item_name and item_qty > 0:
+                            create_or_update_category(conn, item_name, 0, item_qty)
                     
                     # Identifica qual será o *próximo* código depois dessa criação
                     next_code = get_next_code(conn)
@@ -90,6 +99,36 @@ async def websocket_admin(websocket: WebSocket, token: str):
                     "next_code": next_code
                 })
                 
+            elif msg_type == "add_credit":
+                comanda_code = data.get("comanda_code", "").upper()
+                amount = int(data.get("amount", 0))
+                cart_items = data.get("cart_items", [])
+                
+                with get_db_connection() as conn:
+                    comanda = get_comanda_by_code(conn, comanda_code)
+                    if not comanda:
+                        await websocket.send_json({"type": "error", "reason": "comanda_not_found"})
+                        continue
+                    
+                    event = process_credit(conn, comanda.id, amount, note="Crédito adicional")
+                    
+                    # Incrementa total_entries de cada categoria
+                    for item in cart_items:
+                        item_name = item.get("name", "")
+                        item_qty = int(item.get("quantity", 0))
+                        if item_name and item_qty > 0:
+                            create_or_update_category(conn, item_name, 0, item_qty)
+                    
+                    new_balance = get_balance(conn, comanda.id)
+                
+                await manager.broadcast({
+                    "type": "credit_confirmed",
+                    "code": comanda_code,
+                    "holder_name": comanda.holder_name,
+                    "amount": amount,
+                    "new_balance": new_balance
+                })
+
             elif msg_type == "register_category":
                 name = data.get("name")
                 price = int(data.get("price", 0))

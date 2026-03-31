@@ -7,7 +7,7 @@ Como rodar o Ouroboros em desenvolvimento ou em um evento real.
 ## Pré-requisitos
 
 - Python 3.11+
-- Node.js 18+ (para o frontend)
+- Node.js 18+ (para o frontend de demonstração)
 - Git
 
 Nenhum banco de dados externo, nenhum Docker obrigatório.
@@ -47,14 +47,17 @@ Edite o `.env` com os valores do seu ambiente:
 ADMIN_TOKEN=seu_token_admin_aqui
 SECRET_KEY=chave_secreta_aleatoria
 
+# Banco de dados (padrão é o diretório do backend)
+DATABASE_URL=sqlite:///./ouroboros.db
+
 # Firebase (opcional — sync desabilitada se não configurado)
-FIREBASE_PROJECT_ID=
-FIREBASE_PRIVATE_KEY=
-FIREBASE_CLIENT_EMAIL=
+# FIREBASE_PROJECT_ID=
+# FIREBASE_PRIVATE_KEY=
+# FIREBASE_CLIENT_EMAIL=
 
 # Configuração do evento
 EVENT_NAME=Feira da Troca 2025
-MAX_COMANDAS=500
+MAX_COMANDAS=1000
 ```
 
 !!! tip "Gerando tokens seguros"
@@ -67,10 +70,10 @@ MAX_COMANDAS=500
 ## 3. Inicializa o banco
 
 ```bash
-python manage.py init_db
+python manage.py
 ```
 
-Isso cria o arquivo `ouroboros.db` com o schema completo.
+Isso cria o arquivo `ouroboros.db` com o schema completo (tabelas, view e constraints).
 
 ---
 
@@ -90,7 +93,10 @@ Com `--host 0.0.0.0`, outros dispositivos na mesma rede WiFi podem acessar via I
 
 ---
 
-## 5. Frontend
+## 5. Frontend (demonstração)
+
+!!! note "Frontend de demonstração"
+    O frontend incluído é um **protótipo funcional de demonstração**. Ele implementa todos os fluxos do sistema (login, emissão de comandas, carrinho, debitar) mas foi construído com foco em funcionalidade, não em design final. **A interface pode ser livremente customizada, redesenhada ou substituída** — o backend e a API WebSocket são a camada estável do projeto.
 
 ```bash
 cd ../frontend
@@ -109,18 +115,29 @@ npm run build
 
 ---
 
-## 6. Criando lojas e tokens
+## 6. Criando lojas
 
-Após o servidor rodar, acesse o painel admin e crie as lojas. Cada loja recebe um token único que deve ser inserido no terminal correspondente.
+Após o servidor rodar, acesse o painel admin (frontend em `http://localhost:5173`, selecione "Banco" e use o `ADMIN_TOKEN` como chave de acesso).
 
-Ou via API:
+No Dashboard do Banco, clique em **"Gerenciar Lojas"** para criar lojas e obter os tokens dos terminais.
+
+Ou via API REST:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/stores \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
+curl -X POST http://localhost:8000/api/stores \
+  -H "token: SEU_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Cantina Italiana", "theme": "italiana"}'
+  -d '{"name": "Cantina Italiana"}'
 ```
+
+A resposta incluirá o `terminal_token` gerado automaticamente para a loja.
+
+---
+
+## 7. Fluxo de login e operação
+
+1. **Banco (Admin):** Na tela de login, selecione "Banco" e insira o `ADMIN_TOKEN` definido no `.env`.
+2. **Loja:** Na tela de login, selecione "Loja" e insira o `terminal_token` da loja (obtido via painel admin ou API).
 
 ---
 
@@ -133,10 +150,11 @@ O servidor roda na máquina do organizador. Os terminais das lojas se conectam v
 ```
 Notebook do organizador
 ├── IP: 192.168.1.10 (exemplo)
-└── roda: uvicorn --host 0.0.0.0 --port 8000
+└── roda: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Terminais das lojas
-└── abrem: http://192.168.1.10:8000/store/<store_token>
+└── abrem: http://192.168.1.10:5173 (frontend dev)
+    ou http://192.168.1.10:8000 (se build de produção)
 ```
 
 !!! warning "Anote o IP antes do evento"
@@ -154,17 +172,3 @@ cp ouroboros.db backups/ouroboros-$(date +%H%M).db
 ```
 
 O banco inteiro é um único arquivo. Um pendrive com cópias periódicas é suficiente.
-
----
-
-## Verificando que está tudo certo
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Resposta esperada
-{"status": "ok", "db": "connected", "firebase": "connected"}
-# ou
-{"status": "ok", "db": "connected", "firebase": "disabled"}
-```

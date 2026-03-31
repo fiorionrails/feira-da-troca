@@ -43,6 +43,9 @@ export function useAdminWebSocket() {
           case 'admin_balance_updated': // Alguem fez venda lá na loja
             setEconomyStream(prev => [msg, ...prev].slice(0, 10))
             break
+          case 'credit_confirmed':
+            setRecentComandas(prev => [{ type: 'credit_added', ...msg }, ...prev].slice(0, 10))
+            break
         }
       }
 
@@ -66,15 +69,27 @@ export function useAdminWebSocket() {
     }
   }, [navigate])
 
-  const createComanda = useCallback((holderName, initialBalance) => {
+  const createComanda = useCallback((holderName, initialBalance, cartItems = []) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({
         type: 'create_comanda',
         holder_name: holderName,
-        initial_balance: initialBalance
+        initial_balance: initialBalance,
+        cart_items: cartItems
       }))
     }
   }, [])
 
-  return { isConnected, nextCode, recentComandas, economyStream, createComanda }
+  const addCredit = useCallback((comandaCode, amount, cartItems = []) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({
+        type: 'add_credit',
+        comanda_code: comandaCode,
+        amount,
+        cart_items: cartItems
+      }))
+    }
+  }, [])
+
+  return { isConnected, nextCode, recentComandas, economyStream, createComanda, addCredit }
 }

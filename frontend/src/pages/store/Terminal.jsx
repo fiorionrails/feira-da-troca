@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Wifi, WifiOff, CreditCard, Search, ArrowRight, LogOut, Store } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Wifi, WifiOff, CreditCard, Search, ArrowRight, LogOut, Store, ShoppingCart, Plus, Minus, X } from 'lucide-react'
 import { useStoreWebSocket, playSound } from '../../hooks/useStoreWebSocket'
 import { useNavigate } from 'react-router-dom'
 
@@ -8,34 +8,89 @@ export default function Terminal() {
   const { isConnected, storeInfo, lastQueryData, lastDebitResult, queryBalance, requestDebit, clearQuery, clearSearch } = useStoreWebSocket()
   
   const [code, setCode] = useState('')
-  const [amountInput, setAmountInput] = useState('')
+  
+  // Cart State System
+  const [categories, setCategories] = useState([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [cart, setCart] = useState([])
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const searchInputRef = useRef(null)
 
-  // Efeito p/ tocar som e mostrar tela de sucesso/falha
+  // Efeito p/ tocar som e limpar cart no sucesso
   useEffect(() => {
     if (lastDebitResult) {
-      if (lastDebitResult.success) playSound('success')
+      if (lastDebitResult.success) {
+          playSound('success')
+          setCart([]) // Limpa o carrinho ao finalizar com sucesso
+          setCode('') // Limpa comanda
+          clearSearch() 
+      }
       else playSound('error')
     }
   }, [lastDebitResult])
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/api/categories')
+        if (res.ok) {
+           const data = await res.json()
+           setCategories(data.map(c => ({...c, ETC: Math.floor(c.price / 100)})))
+        }
+      } catch (err) {
+         console.error("Falha ao puxar categorias do backend", err)
+      }
+    }
+    fetchCategories()
+  }, [])
+
+  const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+
+  const cartTotal = cart.reduce((acc, item) => acc + (item.ETC * item.quantity), 0)
+
+  const addToCart = (category) => {
+      setCart(prev => {
+          const existing = prev.find(i => i.id === category.id)
+          if (existing) {
+              return prev.map(i => i.id === category.id ? { ...i, quantity: i.quantity + 1 } : i)
+          }
+          return [...prev, { ...category, quantity: 1 }]
+      })
+      setSearchQuery('')
+      setIsDropdownOpen(false)
+      searchInputRef.current?.focus()
+      if (lastDebitResult) clearQuery() // limpa o erro antigo se começar a interagir
+  }
+
+  const updateQuantity = (id, delta) => {
+      setCart(prev => prev.map(i => {
+          if (i.id === id) {
+              const newQ = i.quantity + delta
+              return newQ > 0 ? { ...i, quantity: newQ } : i
+          }
+          return i
+      }))
+      if (lastDebitResult) clearQuery()
+  }
+
+  const removeFromCart = (id) => {
+      setCart(prev => prev.filter(i => i.id !== id))
+      if (lastDebitResult) clearQuery()
+  }
 
   const handleSearch = (e) => {
     e.preventDefault()
     if (code.trim()) {
         queryBalance(code.trim())
-        setAmountInput('') // reseta o input debito ao buscar nova comanda
     }
   }
 
   const handleDebit = (e) => {
       e.preventDefault()
-      if (amountInput && code) {
-          requestDebit(code.trim(), amountInput)
+      if (cartTotal > 0 && code && lastQueryData) {
+          requestDebit(code.trim(), cartTotal)
       }
-  }
-
-  const handleAmountChange = (e) => {
-      setAmountInput(e.target.value)
-      if (lastDebitResult) clearQuery() // Limpa erros amarelos anteriores ao digitar novo valor (mas nao limpa a comanda)
   }
 
   const handleCodeChange = (e) => {
@@ -71,10 +126,10 @@ export default function Terminal() {
       </header>
 
       {/* Main Terminal Area */}
-      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-         <div style={{ width: '100%', maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            
-            {/* Bloco 1: Busca Central Ouroboros Fxxx */}
+      <main style={{ flex: 1, padding: '32px', display: 'grid', gridTemplateColumns: 'minmax(350px, 1fr) minmax(350px, 1fr)', gap: '32px' }}>
+          
+          {/* Coluna 1: Buscar Comanda & Debitar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <form onSubmit={handleSearch} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '32px' }}>
                 <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>CÓDIGO DA COMANDA</h3>
                 
@@ -94,15 +149,15 @@ export default function Terminal() {
                 </div>
             </form>
 
-            {/* Bloco 2: Resultado e Debito Rápido */}
+            {/* Resultado e Debito */}
             {lastQueryData && !lastQueryData.error && (
-                <div className="glass-panel animate-fade-in" style={{ padding: '32px' }}>
+                <div className="glass-panel animate-fade-in" style={{ padding: '32px', display: 'flex', flexDirection: 'column' }}>
                     
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>TÍTULAR DA CONTA</p>
                             <h2 style={{ fontSize: '1.8rem', margin: 0 }}>{lastQueryData.holder_name}</h2>
-                            <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', letterSpacing: '2px' }}>{code}</span>
+                            <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', letterSpacing: '2px', display: 'inline-block', marginTop: '8px' }}>{code}</span>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>SALDO DISPONÍVEL</p>
@@ -112,26 +167,22 @@ export default function Terminal() {
                         </div>
                     </div>
 
-                    <form onSubmit={handleDebit} style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '24px', display: 'flex', gap: '16px' }}>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }}>VALOR DO DÉBITO (ETECOINS)</label>
-                            <input 
-                                type="number" 
-                                min="1"
-                                step="1"
-                                className="input-premium"
-                                placeholder="Ex: 5"
-                                value={amountInput}
-                                onChange={handleAmountChange}
-                                onKeyDown={(e) => ["e", "E", "+", "-", ".", ","].includes(e.key) && e.preventDefault()}
-                                style={{ fontSize: '1.2rem' }}
-                                required
-                            />
-                        </div>
-                        <button type="submit" className="btn btn-danger" style={{ alignSelf: 'flex-end', height: '52px', padding: '0 32px' }}>
-                            <CreditCard style={{ marginRight: '8px' }}/> DEBITAR 
-                        </button>
-                    </form>
+                    <div style={{ marginTop: '32px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', textAlign: 'center' }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '1px' }}>TOTAL A DEBITAR</p>
+                        <h2 style={{ fontSize: '2.5rem', margin: '8px 0', color: cartTotal > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                            {cartTotal} ETC
+                        </h2>
+                    </div>
+
+                    <button 
+                        onClick={handleDebit}
+                        className="btn btn-danger" 
+                        disabled={cartTotal === 0} 
+                        style={{ marginTop: '16px', height: '52px', opacity: cartTotal === 0 ? 0.5 : 1, width: '100%', justifyContent: 'center' }}
+                    >
+                        <CreditCard style={{ marginRight: '8px' }}/> 
+                        {cartTotal > 0 ? `DEBITAR ${cartTotal} ETC` : "ADICIONE ITENS AO CARRINHO"} 
+                    </button>
 
                     {lastDebitResult && (
                         <div className="animate-fade-in" style={{ 
@@ -143,7 +194,7 @@ export default function Terminal() {
                                 ? "✅ Débito efetuado com sucesso!"
                                 : lastDebitResult.reason === 'insufficient_balance' 
                                     ? `❌ Saldo Insuficiente. Faltam: ${lastDebitResult.requested - lastDebitResult.current_balance} ETC`
-                                    : "❌ Valor inválido."
+                                    : "❌ Erro ao debitar."
                              }
                         </div>
                     )}
@@ -152,11 +203,96 @@ export default function Terminal() {
 
             {lastQueryData && lastQueryData.error && (
                 <div className="glass-panel animate-fade-in" style={{ textAlign: 'center', borderColor: 'var(--danger)' }}>
-                    <h3 style={{ color: 'var(--danger)' }}>Comanda {code || "Fxxx"} não encontrada na carteira local.</h3>
+                    <h3 style={{ color: 'var(--danger)' }}>Comanda {code || "Fxxx"} não encontrada.</h3>
                 </div>
             )}
-            
-         </div>
+          </div>
+
+          {/* Coluna 2: Carrinho */}
+          <div className="glass-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+             <div style={{ background: 'rgba(0,0,0,0.3)', padding: '24px', borderBottom: '1px solid var(--border-glass)' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <ShoppingCart size={20} color="var(--accent-primary)"/> Terminal de Vendas
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                    Selecione os itens para debitar da comanda do aluno.
+                </p>
+             </div>
+
+             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto' }}>
+                 {/* Auto Complete Search */}
+                 <div style={{ position: 'relative' }}>
+                    <input 
+                        ref={searchInputRef}
+                        type="text" 
+                        className="input-premium"
+                        placeholder="Buscar item do catálogo..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setIsDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsDropdownOpen(true)}
+                    />
+                    
+                    {/* Lista Flutuante de Dropdown */}
+                    {isDropdownOpen && searchQuery && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#0f111a', border: '1px solid var(--border-glass)', borderRadius: '8px', marginTop: '4px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', maxHeight: '200px', overflowY: 'auto' }}>
+                            {filteredCategories.length > 0 ? (
+                                filteredCategories.map(cat => (
+                                    <div 
+                                        key={cat.id} 
+                                        onClick={() => addToCart(cat)}
+                                        style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}
+                                        onMouseOver={e => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'}
+                                        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        <span>{cat.name}</span>
+                                        <strong style={{ color: 'var(--accent-primary)' }}>{cat.ETC} ETC</strong>
+                                    </div>
+                                ))
+                            ) : (
+                                <div style={{ padding: '12px 16px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                    Nenhum item encontrado no catálogo.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                 </div>
+
+                 {/* Lista do Cart */}
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
+                    {cart.map(item => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                    <strong style={{ fontSize: '1rem' }}>{item.name}</strong>
+                                </div>
+                                <span style={{ color: 'var(--success)', fontSize: '0.9rem' }}>{item.ETC} ETC /cada</span>
+                            </div>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '4px', borderRadius: '4px' }}>
+                                    <button type="button" onClick={() => updateQuantity(item.id, -1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '4px' }}><Minus size={14}/></button>
+                                    <span style={{ minWidth: '20px', textAlign: 'center', fontWeight: 'bold' }}>{item.quantity}</span>
+                                    <button type="button" onClick={() => updateQuantity(item.id, 1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '4px' }}><Plus size={14}/></button>
+                                </div>
+                                <button type="button" onClick={() => removeFromCart(item.id)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px', marginLeft: '8px' }} title="Remover regra">
+                                    <X size={18}/>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+
+                    {cart.length === 0 && (
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                            <ShoppingCart size={48} opacity={0.3} />
+                            O carrinho está vazio. Adicione os itens da loja para debitar.
+                        </div>
+                    )}
+                 </div>
+             </div>
+          </div>
       </main>
     </div>
   )
