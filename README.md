@@ -47,8 +47,6 @@ Substitui moedas físicas (fichas, papelão) por uma camada digital que opera **
 
 ## Demo
 
-> 📸 **Atenção (Nota para o Autor):** Grave e adicione os 4 GIFs abaixo para exibir o potencial completo do sistema.
-
 <!-- GIF 1: Fluxo do Banco criando comanda -->
 <p align="center">
   <img src="docs/assets/demo-banco.gif" alt="Demo do Banco Central criando comanda e adicionando crédito" width="720" />
@@ -64,12 +62,13 @@ Substitui moedas físicas (fichas, papelão) por uma camada digital que opera **
 </p>
 
 <!-- GIF 3: Analytics em Tempo Real -->
+<!--
 <p align="center">
   <img src="docs/assets/demo-analytics.gif" alt="Demo do Dashboard Analytics público" width="720" />
   <br>
   <em>Dashboard Analítico Público — Atualização 100% ao vivo via WebSocket (IDEAL PARA TELÃO)</em>
 </p>
-
+-->
 <!-- GIF 4: Gestão de Lojas -->
 <p align="center">
   <img src="docs/assets/demo-lojas-admin.gif" alt="Demo de criação de loja no admin" width="720" />
