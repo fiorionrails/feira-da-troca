@@ -463,10 +463,12 @@ export default function Dashboard() {
                     [...economyStream, ...recentComandas]
                     .sort((a,b) => -1)
                     .map((evt, idx) => (
-                        <div key={idx} style={{ padding: '16px', background: 'rgba(0,0,0,0.2)', borderLeft: `3px solid ${evt.type === 'comanda_created' ? 'var(--accent-primary)' : 'var(--danger)'}`, borderRadius: '4px' }}>
+                        <div key={idx} style={{ padding: '16px', background: 'rgba(0,0,0,0.2)', borderLeft: `3px solid ${evt.type === 'comanda_created' ? 'var(--accent-primary)' : evt.type === 'credit_added' ? 'var(--success)' : 'var(--danger)'}`, borderRadius: '4px' }}>
                             {evt.type === 'comanda_created' 
                                 ? <><strong style={{ color: 'var(--accent-primary)' }}>+{evt.code}:</strong> Criada para <b>{evt.holder_name}</b> com inicial de {evt.balance} ETC</>
-                                : <><strong style={{ color: 'var(--danger)' }}>🔥 {evt.comanda_code}:</strong> -{evt.amount} ETC gasto na loja {evt.store_name} (novo saldo: {evt.new_balance} ETC)</>
+                                : evt.type === 'credit_added'
+                                    ? <><strong style={{ color: 'var(--success)' }}>💰 {evt.code}:</strong> +{evt.amount} ETC adicionado para <b>{evt.holder_name}</b> (novo saldo: {evt.new_balance} ETC)</>
+                                    : <><strong style={{ color: 'var(--danger)' }}>🔥 {evt.comanda_code}:</strong> -{evt.amount} ETC gasto na loja {evt.store_name} (novo saldo: {evt.new_balance} ETC)</>
                             }
                         </div>
                     ))
