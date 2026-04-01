@@ -44,7 +44,7 @@ export function useAdminWebSocket() {
             setEconomyStream(prev => [msg, ...prev].slice(0, 10))
             break
           case 'credit_confirmed':
-            setRecentComandas(prev => [{ type: 'credit_added', ...msg }, ...prev].slice(0, 10))
+            setRecentComandas(prev => [{ ...msg, type: 'credit_added' }, ...prev].slice(0, 10))
             break
         }
       }
