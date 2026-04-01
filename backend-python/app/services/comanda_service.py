@@ -1,10 +1,8 @@
 import uuid
 from typing import Optional
-from datetime import datetime, timezone
 from app.models import Comanda, Event, EventType
+from app.utils import now_iso
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 def get_next_code(conn) -> str:
     """Retorna o próximo código disponível (ex: F001, F002)"""
@@ -28,7 +26,7 @@ def create_comanda(conn, holder_name: str, initial_balance: int) -> tuple[Comand
     """Cria uma comanda gerando um código automático e emite saldo inicial."""
     comanda_id = str(uuid.uuid4())
     code = get_next_code(conn)
-    created_at = _now_iso()
+    created_at = now_iso()
     
     # Inicia a transação
     cursor = conn.cursor()

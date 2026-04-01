@@ -1,5 +1,3 @@
-require('dotenv').config();
-
 const config = {
   adminToken: process.env.ADMIN_TOKEN || 'admin_token_change_me',
   secretKey: process.env.SECRET_KEY || 'secret_key_change_me',

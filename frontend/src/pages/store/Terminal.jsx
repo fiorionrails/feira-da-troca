@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
-import { Wifi, WifiOff, CreditCard, Search, ArrowRight, LogOut, Store, ShoppingCart, Plus, Minus, X } from 'lucide-react'
-import { useStoreWebSocket, playSound } from '../../hooks/useStoreWebSocket'
+import { Wifi, WifiOff, CreditCard, Search, LogOut, Store, ShoppingCart, Plus, Minus, X } from 'lucide-react'
+import { useStoreWebSocket } from '../../hooks/useStoreWebSocket'
+import { playSound } from '../../utils/sound'
 import { useNavigate } from 'react-router-dom'
+import { BACKEND_HTTP } from '../../config'
 
 export default function Terminal() {
   const navigate = useNavigate()
-  const { isConnected, storeInfo, lastQueryData, lastDebitResult, queryBalance, requestDebit, clearQuery, clearSearch } = useStoreWebSocket()
-  
+  const { isConnected, storeInfo, lastQueryData, lastDebitResult, wsError, queryBalance, requestDebit, clearQuery, clearSearch } = useStoreWebSocket()
+
   const [code, setCode] = useState('')
-  
+
   // Cart State System
   const [categories, setCategories] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -23,17 +25,17 @@ export default function Terminal() {
           playSound('success')
           setCart([]) // Limpa o carrinho ao finalizar com sucesso
           setCode('') // Limpa comanda
-          clearSearch() 
+          clearSearch()
       }
       else playSound('error')
     }
-  }, [lastDebitResult])
+  }, [lastDebitResult, clearSearch])
 
   // Fetch categories on mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/categories')
+        const res = await fetch(`${BACKEND_HTTP}/api/categories`)
         if (res.ok) {
            const data = await res.json()
            setCategories(data.map(c => ({...c, ETC: c.price})))
@@ -100,7 +102,14 @@ export default function Terminal() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      
+
+      {/* Auth error banner */}
+      {wsError && (
+        <div style={{ padding: '10px 24px', background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid var(--danger)', color: 'var(--danger)', fontSize: '0.9rem', textAlign: 'center' }}>
+          {wsError}
+        </div>
+      )}
+
       {/* Header Premium */}
       <header className="glass-panel" style={{ borderRadius: 0, borderTop: 0, borderLeft: 0, borderRight: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

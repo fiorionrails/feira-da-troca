@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-const WS_URL = 'ws://localhost:8000/ws/admin'
+import { BACKEND_WS } from '../config'
 
 export function useAdminWebSocket() {
   const navigate = useNavigate()
@@ -9,7 +8,8 @@ export function useAdminWebSocket() {
   const [nextCode, setNextCode] = useState('F---')
   const [recentComandas, setRecentComandas] = useState([])
   const [economyStream, setEconomyStream] = useState([])
-  
+  const [wsError, setWsError] = useState(null)
+
   const ws = useRef(null)
 
   useEffect(() => {
@@ -22,14 +22,14 @@ export function useAdminWebSocket() {
     }
 
     const connect = () => {
-      ws.current = new WebSocket(`${WS_URL}?token=${token}`)
+      ws.current = new WebSocket(`${BACKEND_WS}/ws/admin?token=${token}`)
 
       ws.current.onopen = () => { if (isMounted) setIsConnected(true) }
-      
+
       ws.current.onmessage = (event) => {
         if (!isMounted) return
         const msg = JSON.parse(event.data)
-        
+
         switch (msg.type) {
           case 'connected':
             setNextCode(msg.next_code)
@@ -40,32 +40,39 @@ export function useAdminWebSocket() {
           case 'comanda_created':
             setRecentComandas(prev => [msg, ...prev].slice(0, 10))
             break
-          case 'admin_balance_updated': // Alguem fez venda lá na loja
+          case 'admin_balance_updated':
             setEconomyStream(prev => [msg, ...prev].slice(0, 10))
             break
           case 'credit_confirmed':
             setRecentComandas(prev => [{ ...msg, type: 'credit_added' }, ...prev].slice(0, 10))
             break
+          case 'category_updated':
+            // Category changes are reflected on next categories fetch; no local state needed
+            break
         }
+      }
+
+      ws.current.onerror = () => {
+        if (isMounted) setIsConnected(false)
       }
 
       ws.current.onclose = (e) => {
         if (!isMounted) return
         setIsConnected(false)
         if (e.code === 1008) {
-           alert("Token Admin Inválido!")
-           navigate('/')
+          setWsError('Token de administrador inválido.')
+          navigate('/')
         } else {
-           setTimeout(connect, 3000)
+          setTimeout(connect, 3000)
         }
       }
     }
 
     connect()
-    
-    return () => { 
+
+    return () => {
       isMounted = false
-      if (ws.current) ws.current.close() 
+      if (ws.current) ws.current.close()
     }
   }, [navigate])
 
@@ -75,7 +82,7 @@ export function useAdminWebSocket() {
         type: 'create_comanda',
         holder_name: holderName,
         initial_balance: initialBalance,
-        cart_items: cartItems
+        cart_items: cartItems,
       }))
     }
   }, [])
@@ -86,10 +93,11 @@ export function useAdminWebSocket() {
         type: 'add_credit',
         comanda_code: comandaCode,
         amount,
-        cart_items: cartItems
+        cart_items: cartItems,
       }))
     }
   }, [])
 
-  return { isConnected, nextCode, recentComandas, economyStream, createComanda, addCredit }
+  return { isConnected, nextCode, recentComandas, economyStream, wsError, createComanda, addCredit }
 }
+

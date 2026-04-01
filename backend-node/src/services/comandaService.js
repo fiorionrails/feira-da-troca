@@ -1,9 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { EventType } = require('../models');
-
-function nowIso() {
-  return new Date().toISOString();
-}
+const { nowIso } = require('../utils');
 
 function getNextCode(db) {
   const row = db.prepare('SELECT code FROM comandas ORDER BY created_at DESC LIMIT 1').get();

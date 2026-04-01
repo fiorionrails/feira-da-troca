@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { TerminalSquare, ShieldAlert, Plus, Coins, Zap, LogOut, ShoppingCart, X, Minus, Store, RefreshCw, Copy, Check, Activity } from 'lucide-react'
 import { useAdminWebSocket } from '../../hooks/useAdminWebSocket'
 import { useNavigate } from 'react-router-dom'
+import { BACKEND_HTTP } from '../../config'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { isConnected, nextCode, recentComandas, economyStream, createComanda, addCredit } = useAdminWebSocket()
+  const { isConnected, nextCode, recentComandas, economyStream, wsError, createComanda, addCredit } = useAdminWebSocket()
   
   const [holderName, setHolderName] = useState('')
   const [mode, setMode] = useState('new') // 'new' | 'existing'
@@ -30,7 +31,7 @@ export default function Dashboard() {
   const fetchStores = async () => {
       try {
           const token = sessionStorage.getItem('ouroboros_token')
-          const res = await fetch('http://localhost:8000/api/stores', { headers: { 'token': token } })
+          const res = await fetch(`${BACKEND_HTTP}/api/stores`, { headers: { 'token': token } })
           if (res.ok) setStoreList(await res.json())
       } catch (e) {
           console.error(e)
@@ -46,7 +47,7 @@ export default function Dashboard() {
       if (!newStoreName.trim()) return
       try {
           const token = sessionStorage.getItem('ouroboros_token')
-          const res = await fetch('http://localhost:8000/api/stores', {
+          const res = await fetch(`${BACKEND_HTTP}/api/stores`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'token': token },
               body: JSON.stringify({ name: newStoreName })
@@ -65,7 +66,7 @@ export default function Dashboard() {
       
       try {
           const token = sessionStorage.getItem('ouroboros_token')
-          const res = await fetch(`http://localhost:8000/api/stores/${storeId}/revoke_token`, {
+          const res = await fetch(`${BACKEND_HTTP}/api/stores/${storeId}/revoke_token`, {
               method: 'POST',
               headers: { 'token': token }
           })
@@ -87,7 +88,7 @@ export default function Dashboard() {
     const fetchCategories = async () => {
       try {
         const token = sessionStorage.getItem('ouroboros_token')
-        const res = await fetch('http://localhost:8000/api/categories', {
+        const res = await fetch(`${BACKEND_HTTP}/api/categories`, {
           headers: { 'token': token }
         })
         if (res.ok) {
@@ -116,7 +117,7 @@ export default function Dashboard() {
 
       try {
           const token = sessionStorage.getItem('ouroboros_token')
-          const res = await fetch('http://localhost:8000/api/categories', {
+          const res = await fetch(`${BACKEND_HTTP}/api/categories`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'token': token },
               body: JSON.stringify({ name: name, price: price })
@@ -197,7 +198,7 @@ export default function Dashboard() {
       const token = sessionStorage.getItem('ouroboros_token')
       // Use the store WS balance query approach but via a simple REST-like fetch
       // Actually, let's query via a quick WebSocket-style approach. Simpler: query the DB via the existing balance_view
-      const res = await fetch(`http://localhost:8000/api/comanda/${comandaCode.toUpperCase()}`, { headers: { 'token': token } })
+      const res = await fetch(`${BACKEND_HTTP}/api/comanda/${comandaCode.toUpperCase()}`, { headers: { 'token': token } })
       if (res.ok) {
         const data = await res.json()
         setExistingComanda(data)
@@ -212,7 +213,14 @@ export default function Dashboard() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      
+
+      {/* Auth error banner */}
+      {wsError && (
+        <div style={{ padding: '10px 24px', background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid var(--danger)', color: 'var(--danger)', fontSize: '0.9rem', textAlign: 'center' }}>
+          {wsError}
+        </div>
+      )}
+
       <header className="glass-panel" style={{ borderRadius: 0, borderTop: 0, borderLeft: 0, borderRight: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', background: 'rgba(16, 185, 129, 0.05)', borderColor: 'var(--accent-primary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <TerminalSquare size={24} color="var(--accent-primary)" />
