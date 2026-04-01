@@ -13,7 +13,7 @@ O sistema é projetado em camadas de criticidade:
 | Camada | Criticidade | O que falha | Impacto |
 |---|---|---|---|
 | SQLite | Máxima | Banco corrompido | Sistema para |
-| Servidor FastAPI | Alta | Processo cai | Downtime temporário |
+| Servidor (Node.js / FastAPI) | Alta | Processo cai | Downtime temporário |
 | Rede WiFi local | Média | Terminal desconecta | Terminal offline, servidor ok |
 | Internet | Baixa | Firebase inacessível | Sync pausa, operação continua |
 | Firebase | Baixa | Serviço fora do ar | Cliente não vê saldo, operação continua |
@@ -78,7 +78,9 @@ Igual ao cenário 1. Firebase é uma camada de leitura — sua indisponibilidade
 
 **Recuperação:**
 
-1. Operador reinicia o servidor (`uvicorn app.main:app --host 0.0.0.0 --port 8000`)
+1. Operador reinicia o servidor:
+   - **Node.js:** `cd backend-node && npm start`
+   - **Python:** `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 2. SQLite abre o arquivo `.db` — WAL mode garante que nenhuma transação confirmada foi perdida
 3. Servidor fica disponível (tipicamente em < 10 segundos)
 4. Terminais reconectam automaticamente

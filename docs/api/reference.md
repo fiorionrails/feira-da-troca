@@ -1,6 +1,9 @@
 # Referência da API
 
-A API do Ouroboros é construída com FastAPI e exposta na porta `8000`. A documentação interativa está disponível em `/docs` (Swagger UI) e `/redoc` (ReDoc) quando o servidor está rodando.
+A API do Ouroboros é exposta na porta `8000` e é idêntica nos dois backends disponíveis:
+
+- **Node.js** (`backend-node/`) — Express + better-sqlite3
+- **Python** (`backend-python/`) — FastAPI + Uvicorn *(ao usar o backend Python, a documentação interativa está disponível em `/docs` (Swagger UI) e `/redoc` (ReDoc) enquanto o servidor estiver rodando)*
 
 ---
 
@@ -69,6 +72,58 @@ Retorna a visão macro da economia da feira.
 | `comandas_active` | Total de comandas cadastradas |
 | `stores_registered` | Total de lojas cadastradas |
 
+#### `GET /api/reports/analytics`
+
+Retorna dados agregados para o dashboard analítico público (ideal para telão do evento).
+
+**Auth:** Pública (nenhum token necessário)
+
+**Response `200`:**
+```json
+{
+  "kpis": {
+    "total_comandas": 257,
+    "total_emitido": 486000,
+    "total_gasto": 312500,
+    "total_circulante": 173500,
+    "total_transacoes": 2320,
+    "lojas_ativas": 12
+  },
+  "transactions_per_minute": [
+    { "minute": "10:32", "credits": 0, "debits": 3, "total": 3 }
+  ],
+  "top_stores": [
+    { "name": "Cantina Italiana", "total": 45000, "count": 30 }
+  ],
+  "category_distribution": [
+    { "name": "Jaqueta", "count": 42, "price": 1500 }
+  ]
+}
+```
+
+---
+
+### Comandas
+
+#### `GET /api/comanda/{code}`
+
+Retorna os detalhes de uma comanda pelo código curto (ex: `F001`).
+
+**Auth:** Admin (`token` header)
+
+**Response `200`:**
+```json
+{
+  "id": "uuid-interno",
+  "code": "F001",
+  "holder_name": "João Silva",
+  "balance": 1350,
+  "created_at": "2025-11-15T10:00:00Z"
+}
+```
+
+Retorna `404` se o código não existir.
+
 ---
 
 ### Lojas
@@ -86,7 +141,7 @@ Lista todas as lojas cadastradas.
     "id": "uuid-da-loja",
     "name": "Cantina Italiana",
     "theme": "default",
-    "terminal_token": "st_a8bf9x2e1c4d7f90"
+    "terminal_token": "XJ92KF"
   }
 ]
 ```
@@ -104,14 +159,18 @@ Cria uma nova loja com token de terminal gerado automaticamente.
 }
 ```
 
-**Response `200`:**
+**Response `201`:**
 ```json
 {
   "id": "uuid-gerado",
   "name": "Cantina Italiana",
-  "terminal_token": "st_a8bf9x2e1c4d7f90"
+  "terminal_token": "XJ92KF"
 }
 ```
+
+!!! note "Formato do token de loja"
+    O token gerado é uma string de **6 caracteres** alfanuméricos maiúsculos (ex: `XJ92KF`).
+    O alfabeto exclui caracteres ambíguos (`0`, `O`, `1`, `I`) para facilitar a leitura e digitação em terminais de loja.
 
 #### `PUT /api/stores/{store_id}`
 
@@ -136,7 +195,7 @@ Gera um novo token para a loja, invalidando o anterior imediatamente. Qualquer t
 ```json
 {
   "id": "uuid-da-loja",
-  "new_token": "st_novo_token_gerado"
+  "new_token": "KM74PQ"
 }
 ```
 
@@ -178,6 +237,15 @@ Cria uma nova categoria de produto/preço.
 **Request body:**
 ```json
 {
+  "name": "Bolsa",
+  "price": 1500
+}
+```
+
+**Response `201`:**
+```json
+{
+  "id": "uuid-gerado",
   "name": "Bolsa",
   "price": 1500
 }
@@ -318,13 +386,32 @@ Se o token for inválido, o servidor fecha a conexão com código `1008`.
 
 #### `create_comanda`
 
-Solicita a criação de uma nova comanda com saldo inicial.
+Solicita a criação de uma nova comanda com saldo inicial. O campo `cart_items` é opcional e registra os itens avaliados no carrinho do Banco (incrementa `total_entries` das categorias correspondentes).
 
 ```json
 {
   "type": "create_comanda",
   "holder_name": "Maria Oliveira",
-  "initial_balance": 5000
+  "initial_balance": 5000,
+  "cart_items": [
+    { "name": "Jaqueta", "quantity": 2 },
+    { "name": "Camiseta", "quantity": 1 }
+  ]
+}
+```
+
+#### `add_credit`
+
+Adiciona crédito extra a uma comanda já existente (Dual Mode do Banco). O campo `cart_items` segue a mesma lógica de `create_comanda`.
+
+```json
+{
+  "type": "add_credit",
+  "comanda_code": "F001",
+  "amount": 2000,
+  "cart_items": [
+    { "name": "Jaqueta", "quantity": 1 }
+  ]
 }
 ```
 
@@ -355,6 +442,20 @@ Notifica todos os terminais Admin quando uma nova comanda é gerada.
   "code": "F001",
   "holder_name": "Maria Oliveira",
   "balance": 5000
+}
+```
+
+#### `credit_confirmed`
+
+Notifica todos os terminais Admin quando crédito extra é adicionado a uma comanda existente.
+
+```json
+{
+  "type": "credit_confirmed",
+  "code": "F001",
+  "holder_name": "Maria Oliveira",
+  "amount": 2000,
+  "new_balance": 7000
 }
 ```
 

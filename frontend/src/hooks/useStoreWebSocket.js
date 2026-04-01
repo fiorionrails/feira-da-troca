@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-const WS_URL = 'ws://localhost:8000/ws/store'
+import { BACKEND_WS } from '../config'
 
 export function useStoreWebSocket() {
   const navigate = useNavigate()
@@ -9,6 +8,7 @@ export function useStoreWebSocket() {
   const [storeInfo, setStoreInfo] = useState(null)
   const [lastQueryData, setLastQueryData] = useState(null)
   const [lastDebitResult, setLastDebitResult] = useState(null)
+  const [wsError, setWsError] = useState(null)
 
   const ws = useRef(null)
 
@@ -22,7 +22,7 @@ export function useStoreWebSocket() {
         return
       }
 
-      ws.current = new WebSocket(`${WS_URL}?token=${token}`)
+      ws.current = new WebSocket(`${BACKEND_WS}/ws/store?token=${token}`)
 
       ws.current.onopen = () => { if (isMounted) setIsConnected(true) }
 
@@ -45,25 +45,29 @@ export function useStoreWebSocket() {
             break
           case 'error':
             if (msg.reason === 'comanda_not_found') {
-               setLastQueryData({ error: 'Comanda não encontrada' })
+              setLastQueryData({ error: 'Comanda não encontrada' })
             }
             break
           case 'balance_updated':
             setLastQueryData(prev => {
-               if (prev && prev.comanda_code === msg.comanda_code) {
-                   return { ...prev, balance: msg.new_balance }
-               }
-               return prev
+              if (prev && prev.comanda_code === msg.comanda_code) {
+                return { ...prev, balance: msg.new_balance }
+              }
+              return prev
             })
             break
         }
+      }
+
+      ws.current.onerror = () => {
+        if (isMounted) setIsConnected(false)
       }
 
       ws.current.onclose = (e) => {
         if (!isMounted) return
         setIsConnected(false)
         if (e.code === 1008) {
-          alert("Token da Loja Inválido!")
+          setWsError('Token da loja inválido.')
           navigate('/')
         } else {
           setTimeout(connectStore, 2000)
@@ -72,10 +76,10 @@ export function useStoreWebSocket() {
     }
 
     connectStore()
-    
-    return () => { 
+
+    return () => {
       isMounted = false
-      if (ws.current) ws.current.close() 
+      if (ws.current) ws.current.close()
     }
   }, [navigate])
 
@@ -88,41 +92,15 @@ export function useStoreWebSocket() {
   }, [])
 
   const requestDebit = useCallback((code, amountRaw) => {
-      const amount = parseInt(amountRaw, 10)
-      if (ws.current?.readyState === WebSocket.OPEN && amount > 0) {
-        ws.current.send(JSON.stringify({ type: 'debit_request', comanda_code: code.toUpperCase(), amount }))
-      }
+    const amount = parseInt(amountRaw, 10)
+    if (ws.current?.readyState === WebSocket.OPEN && amount > 0) {
+      ws.current.send(JSON.stringify({ type: 'debit_request', comanda_code: code.toUpperCase(), amount }))
+    }
   }, [])
 
-  const clearQuery = () => setLastDebitResult(null)
-  const clearSearch = () => { setLastQueryData(null); setLastDebitResult(null); }
+  const clearQuery = useCallback(() => setLastDebitResult(null), [])
+  const clearSearch = useCallback(() => { setLastQueryData(null); setLastDebitResult(null) }, [])
 
-  return { isConnected, storeInfo, lastQueryData, lastDebitResult, queryBalance, requestDebit, clearQuery, clearSearch }
+  return { isConnected, storeInfo, lastQueryData, lastDebitResult, wsError, queryBalance, requestDebit, clearQuery, clearSearch }
 }
 
-// Utility para tocar som digital via Web Audio API 
-export const playSound = (type) => {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-
-    if (type === 'success') {
-        osc.type = 'sine'
-        osc.frequency.setValueAtTime(800, ctx.currentTime)
-        osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1)
-        gain.gain.setValueAtTime(0.5, ctx.currentTime)
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2)
-        osc.start(ctx.currentTime)
-        osc.stop(ctx.currentTime + 0.2)
-    } else {
-        osc.type = 'sawtooth'
-        osc.frequency.setValueAtTime(200, ctx.currentTime)
-        osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3)
-        gain.gain.setValueAtTime(0.5, ctx.currentTime)
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
-        osc.start(ctx.currentTime)
-        osc.stop(ctx.currentTime + 0.3)
-    }
-}

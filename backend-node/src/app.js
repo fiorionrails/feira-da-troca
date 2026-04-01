@@ -4,7 +4,6 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const cors = require('cors');
 const { rateLimit } = require('express-rate-limit');
-const url = require('url');
 
 const config = require('./config');
 const restRouter = require('./api/rest');
@@ -37,8 +36,9 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (request, socket, head) => {
-  const { pathname, query } = url.parse(request.url, true);
-  const token = query.token || '';
+  const parsedUrl = new URL(request.url, `http://localhost:${config.port}`);
+  const { pathname } = parsedUrl;
+  const token = parsedUrl.searchParams.get('token') || '';
 
   if (pathname === '/ws/admin') {
     wss.handleUpgrade(request, socket, head, (ws) => {

@@ -6,6 +6,7 @@ import {
   BarChart, Bar
 } from 'recharts'
 import { Activity, Users, Coins, TrendingUp, Store, Zap, ArrowLeft, ShoppingCart } from 'lucide-react'
+import { BACKEND_HTTP, BACKEND_WS } from '../../config'
 
 const COLORS = ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5', '#065f46', '#047857', '#059669']
 
@@ -60,12 +61,12 @@ export default function Analytics() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/reports/analytics')
+        const res = await fetch(`${BACKEND_HTTP}/api/reports/analytics`)
         if (res.ok) {
           const newData = await res.json()
-          
-          // Detectar mudanças nos KPIs pra flash
-          if (prevKpis.current && data) {
+
+          // Detectar mudanças nos KPIs pra flash; prevKpis.current serve como guard de "primeiro load"
+          if (prevKpis.current) {
             const changed = Object.keys(newData.kpis).find(k => newData.kpis[k] !== prevKpis.current[k])
             if (changed) {
               setFlash(changed)
@@ -89,7 +90,7 @@ export default function Analytics() {
     if (!token) return
 
     const connect = () => {
-      wsRef.current = new WebSocket(`ws://localhost:8000/ws/admin?token=${token}`)
+      wsRef.current = new WebSocket(`${BACKEND_WS}/ws/admin?token=${token}`)
       wsRef.current.onmessage = (event) => {
         const msg = JSON.parse(event.data)
         if (msg.type === 'comanda_created' || msg.type === 'admin_balance_updated') {
