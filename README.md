@@ -33,16 +33,6 @@ Sistema de **economia digital fechada** projetado para a **Feira da Troca na Ete
 
 Substitui moedas físicas (fichas, papelão) por uma camada digital que opera **100% offline** dentro da rede local — sem depender de internet, sem Firebase obrigatório, sem plano pago. Um notebook rodando o servidor + qualquer browser na mesma rede WiFi como terminal.
 
-### Números reais (edição 2025)
-
-| Métrica | Valor |
-|---|---|
-| Produtos cadastrados | ~6.200 |
-| Comandas emitidas | 257 |
-| Transações processadas | 2.320 |
-| Pico de carga | ~450 tx em 30 min |
-| Downtime por falha | 0 |
-
 ---
 
 ## Demo

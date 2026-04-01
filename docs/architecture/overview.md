@@ -4,17 +4,6 @@ Ouroboros opera dentro de um ambiente controlado: a rede local de um evento esco
 
 A arquitetura reflete isso.
 
-### Histórico e Dimensionamento (Base 2025)
-
-Os dados da edição de 2025 da Feira da Troca confirmam que a carga é perfeitamente suportável por uma única instância local:
-
-- **Volume Total:** ~6.200 produtos cadastrados.
-- **Participantes Ativos:** 257 comandas (cartões) entregues.
-- **Transações:** 2.320 produtos trocados ao longo do evento.
-- **Pico de Carga:** ~450 transações em 30 minutos (menos de 1 transação a cada 4 segundos no pico).
-
-Com esses números, qualquer notebook moderno processando SQLite consegue manter latências abaixo de 10ms sem esforço, tornando qualquer **complexidade de nuvem ou escalabilidade horizontal desnecessária e contraproducente**.
-
 ---
 
 ## Componentes
