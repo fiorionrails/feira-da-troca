@@ -30,7 +30,7 @@ O núcleo do sistema. Roda em qualquer máquina na rede local (um notebook comum
 - Transmitir eventos em tempo real via WebSocket
 - Sincronizar eventos confirmados pro Firebase de forma assíncrona
 
-**Stack:** FastAPI (Python) + SQLite + Uvicorn
+**Stack:** Node.js + Express **ou** Python + FastAPI + Uvicorn, ambos com SQLite (WAL mode)
 
 ### Terminais de Loja
 
@@ -79,7 +79,7 @@ graph TB
         terminal_b["Terminal Loja B\n(browser)"]
         admin["Painel Admin\n(browser)"]
         
-        servidor["Servidor Principal\nFastAPI + Uvicorn"]
+        servidor["Servidor Principal\nNode.js+Express ou FastAPI+Uvicorn"]
         sqlite[("SQLite\nEvent Store")]
         static["Assets Estáticos\n(React build)"]
         

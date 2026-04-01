@@ -11,7 +11,7 @@ O administrador emite uma comanda para um participante com saldo inicial.
 ```mermaid
 sequenceDiagram
     actor Admin
-    participant API as Servidor (FastAPI)
+    participant API as Servidor
     participant DB as SQLite
     participant FB as Firebase
 
@@ -44,7 +44,7 @@ sequenceDiagram
     actor Cliente
     actor Lojista
     participant WS as WebSocket (Terminal)
-    participant API as Servidor (FastAPI)
+    participant API as Servidor
     participant DB as SQLite
     participant Outros as Outros Terminais
     participant FB as Firebase
