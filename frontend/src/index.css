@@ -16,6 +16,11 @@
 
   --danger: #ef4444; /* Vermelho para erros */
   --warning: #f59e0b; /* Laranja para avisos */
+  --success: #10b981; /* Verde confirmação */
+
+  /* Aliases semânticos usados nos componentes */
+  --accent-primary: var(--lime-primary);
+  --border-glass: var(--border-lime);
 
   /* Tokens de Design */
   --glass-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.6);
@@ -45,6 +50,11 @@
 
   --danger: #dc2626; /* Vermelho mais escuro */
   --warning: #d97706; /* Laranja mais escuro */
+  --success: #059669; /* Verde confirmação (mais escuro para contraste no fundo branco) */
+
+  /* Aliases semânticos — mesmo padrão do modo escuro */
+  --accent-primary: var(--lime-primary);
+  --border-glass: var(--border-lime);
 
   /* Tokens de Design */
   --glass-shadow: 0 1px 8px 0 rgba(0, 0, 0, 0.1);

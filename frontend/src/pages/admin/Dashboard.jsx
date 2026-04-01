@@ -213,24 +213,13 @@ export default function Dashboard() {
   }
 
   return (
-    <Layout role="admin" isConnected={isConnected}>
+    <Layout role="admin" isConnected={isConnected} onManageStores={() => setShowStoreModal(true)}>
       {/* Auth error banner */}
       {wsError && (
         <div style={{ padding: '10px 24px', background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid var(--danger)', color: 'var(--danger)', fontSize: '0.9rem', textAlign: 'center' }}>
           {wsError}
         </div>
       )}
-
-      {/* Action Bar - Gerenciar Lojas */}
-      <div style={{ padding: '16px 32px', background: 'rgba(132, 204, 22, 0.05)', borderBottom: '1px solid var(--border-lime)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-        <button
-          onClick={() => setShowStoreModal(true)}
-          className="btn btn-outline"
-          style={{ padding: '8px 16px', fontSize: '0.85rem' }}
-        >
-          <Store size={16} /> Gerenciar Lojas
-        </button>
-      </div>
 
       {/* Main Grid: Mudei para 3 colunas, a do meio virou o Cart */}
       <div style={{ flex: 1, padding: '32px', display: 'grid', gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(350px, 1fr) 1fr', gap: '32px' }}>
@@ -441,7 +430,7 @@ export default function Dashboard() {
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {
                     [...economyStream, ...recentComandas]
-                    .sort((a,b) => -1)
+                    .sort((a, b) => (b._ts || 0) - (a._ts || 0))
                     .map((evt, idx) => (
                         <div key={idx} style={{ padding: '16px', background: 'var(--element-bg)', borderLeft: `3px solid ${evt.type === 'comanda_created' ? 'var(--accent-primary)' : evt.type === 'credit_added' ? 'var(--success)' : 'var(--danger)'}`, borderRadius: '4px' }}>
                             {evt.type === 'comanda_created' 

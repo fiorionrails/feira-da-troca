@@ -38,13 +38,13 @@ export function useAdminWebSocket() {
             setNextCode(msg.next_code)
             break
           case 'comanda_created':
-            setRecentComandas(prev => [msg, ...prev].slice(0, 10))
+            setRecentComandas(prev => [{ ...msg, _ts: Date.now() }, ...prev].slice(0, 10))
             break
           case 'admin_balance_updated':
-            setEconomyStream(prev => [msg, ...prev].slice(0, 10))
+            setEconomyStream(prev => [{ ...msg, _ts: Date.now() }, ...prev].slice(0, 10))
             break
           case 'credit_confirmed':
-            setRecentComandas(prev => [{ ...msg, type: 'credit_added' }, ...prev].slice(0, 10))
+            setRecentComandas(prev => [{ ...msg, type: 'credit_added', _ts: Date.now() }, ...prev].slice(0, 10))
             break
           case 'category_updated':
             // Category changes are reflected on next categories fetch; no local state needed

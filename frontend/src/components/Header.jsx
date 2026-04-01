@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wifi, WifiOff, LogOut, BarChart3, Clock, Sun, Moon } from 'lucide-react'
+import { Wifi, WifiOff, LogOut, BarChart3, Clock, Sun, Moon, Store } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
 export default function Header({
   role, // 'admin' | 'store' | 'analytics'
   isConnected = true,
   storeInfo = null, // { name: 'Loja X' }
-  onLogout
+  onLogout,
+  onManageStores = null,
 }) {
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
@@ -64,69 +65,52 @@ export default function Header({
 
         {/* Seção de Status e Ações */}
         <div style={styles.rightSection}>
+
           {/* Relógio */}
-          <div style={styles.timeWrapper}>
-            <Clock size={16} color="var(--text-muted)" />
-            <span style={styles.time}>
-              {currentTime.toLocaleTimeString('pt-BR', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-              })}
+          <div style={styles.chip}>
+            <Clock size={16} />
+            <span style={styles.chipText}>
+              {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
 
-          {/* Status de Conexão WebSocket */}
+          {/* Status WS */}
           {(role === 'admin' || role === 'store') && (
-            <div style={styles.statusWrapper}>
-              {isConnected ? (
-                <>
-                  <div style={styles.statusDot} />
-                  <Wifi size={18} color="var(--lime-primary)" />
-                  <span style={styles.statusText}>Conectado</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff size={18} color="var(--danger)" />
-                  <span style={{ ...styles.statusText, color: 'var(--danger)' }}>
-                    Desconectado
-                  </span>
-                </>
-              )}
+            <div
+              style={{ ...styles.chip, color: isConnected ? 'var(--lime-primary)' : 'var(--danger)' }}
+              title={isConnected ? 'Conectado' : 'Desconectado'}
+            >
+              {isConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
             </div>
           )}
 
-          {/* Botão de Tema */}
-          <button
-            onClick={toggleTheme}
-            style={styles.iconButton}
-            title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
-          >
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          {/* Tema */}
+          <button onClick={toggleTheme} style={styles.chip} title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}>
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          {/* Botão Analytics (apenas no Admin) */}
-          {role === 'admin' && (
-            <button
-              onClick={() => window.open('/analytics', '_blank')}
-              style={styles.iconButton}
-              title="Abrir Analytics"
-            >
-              <BarChart3 size={20} />
+          {/* Gerenciar Lojas (admin) */}
+          {role === 'admin' && onManageStores && (
+            <button onClick={onManageStores} style={styles.chip} title="Gerenciar Lojas">
+              <Store size={16} />
             </button>
           )}
 
-          {/* Botão Logout */}
-          {role !== 'analytics' && (
-            <button
-              onClick={handleLogout}
-              style={styles.logoutButton}
-              title="Sair"
-            >
-              <LogOut size={18} />
-              <span style={styles.logoutText}>Sair</span>
+          {/* Analytics (admin) */}
+          {role === 'admin' && (
+            <button onClick={() => window.open('/analytics', '_blank')} style={styles.chip} title="Abrir Analytics">
+              <BarChart3 size={16} />
             </button>
           )}
+
+          {/* Logout */}
+          {role !== 'analytics' && (
+            <button onClick={handleLogout} style={styles.chip} title="Sair">
+              <LogOut size={16} />
+              <span style={styles.chipText} data-header-logout-text="">Sair</span>
+            </button>
+          )}
+
         </div>
       </div>
     </header>
@@ -184,77 +168,25 @@ const styles = {
   rightSection: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
-  },
-  timeWrapper: {
-    display: 'flex',
-    alignItems: 'center',
     gap: '8px',
-    padding: '8px 12px',
-    background: 'var(--element-bg)',
-    borderRadius: '6px',
-    border: '1px solid var(--border-lime)',
   },
-  time: {
-    fontSize: '0.85rem',
-    fontWeight: 600,
-    color: 'var(--text-muted)',
-    fontVariantNumeric: 'tabular-nums',
-  },
-  statusWrapper: {
+  chip: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '6px',
     padding: '8px 12px',
-    background: 'var(--element-bg)',
-    borderRadius: '6px',
-    border: '1px solid var(--border-lime)',
-    position: 'relative',
-  },
-  statusDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    background: 'var(--lime-primary)',
-    boxShadow: '0 0 8px var(--lime-primary)',
-    animation: 'pulse 2s ease-in-out infinite',
-  },
-  statusText: {
-    fontSize: '0.85rem',
-    fontWeight: 600,
-    color: 'var(--lime-primary)',
-  },
-  iconButton: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '10px',
     background: 'var(--lime-glow)',
     border: '1px solid var(--border-lime)',
     borderRadius: '6px',
     color: 'var(--lime-primary)',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-  },
-  logoutButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 16px',
-    background: 'transparent',
-    border: '1px solid var(--border-lime)',
-    borderRadius: '6px',
-    color: 'var(--lime-primary)',
-    cursor: 'pointer',
     fontFamily: 'inherit',
-    fontSize: '0.9rem',
-    fontWeight: 600,
     transition: 'all 0.2s ease',
   },
-  logoutText: {
-    '@media (max-width: 640px)': {
-      display: 'none',
-    },
+  chipText: {
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
   },
 }
 
@@ -277,12 +209,17 @@ if (typeof document !== 'undefined') {
       to { transform: rotate(360deg); }
     }
     header button:hover {
-      background: var(--lime-glow) !important;
+      background: var(--border-lime) !important;
       border-color: var(--lime-primary) !important;
       transform: translateY(-1px);
     }
     header button:active {
       transform: translateY(0);
+    }
+    @media (max-width: 640px) {
+      [data-header-logout-text] {
+        display: none;
+      }
     }
   `
   if (!document.querySelector('style[data-header-styles]')) {

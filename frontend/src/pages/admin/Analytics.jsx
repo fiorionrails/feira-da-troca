@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell,
   BarChart, Bar
 } from 'recharts'
-import { Activity, Users, Coins, TrendingUp, Store, ShoppingCart } from 'lucide-react'
+import { Activity, Users, Coins, TrendingUp, Store, ShoppingCart, Zap } from 'lucide-react'
 import { BACKEND_HTTP, BACKEND_WS } from '../../config'
 import Layout from '../../components/Layout'
 

@@ -1,6 +1,6 @@
 import Header from './Header'
 
-export default function Layout({ role, isConnected, storeInfo, onLogout, children }) {
+export default function Layout({ role, isConnected, storeInfo, onLogout, onManageStores, children }) {
   return (
     <div style={styles.container}>
       <Header
@@ -8,6 +8,7 @@ export default function Layout({ role, isConnected, storeInfo, onLogout, childre
         isConnected={isConnected}
         storeInfo={storeInfo}
         onLogout={onLogout}
+        onManageStores={onManageStores}
       />
       <main style={styles.main}>
         {children}

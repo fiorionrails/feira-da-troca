@@ -6,7 +6,7 @@ const { nowIso } = require('../utils');
 class InsufficientBalanceError extends Error {}
 class InvalidAmountError extends Error {}
 
-(db, comandaId, amount, storeId, note = null) {
+function processDebit(db, comandaId, amount, storeId, note = null) {
   if (amount <= 0) throw new InvalidAmountError('Debit amount must be greater than zero.');
 
   const insertEvent = db.prepare(
