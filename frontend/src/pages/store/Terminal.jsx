@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Wifi, WifiOff, CreditCard, Search, LogOut, Store, ShoppingCart, Plus, Minus, X } from 'lucide-react'
+import { CreditCard, Search, ShoppingCart, Plus, Minus, X } from 'lucide-react'
 import { useStoreWebSocket } from '../../hooks/useStoreWebSocket'
 import { playSound } from '../../utils/sound'
 import { useNavigate } from 'react-router-dom'
 import { BACKEND_HTTP } from '../../config'
+import Layout from '../../components/Layout'
 
 export default function Terminal() {
   const navigate = useNavigate()
@@ -101,8 +102,7 @@ export default function Terminal() {
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-
+    <Layout role="store" isConnected={isConnected} storeInfo={storeInfo}>
       {/* Auth error banner */}
       {wsError && (
         <div style={{ padding: '10px 24px', background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid var(--danger)', color: 'var(--danger)', fontSize: '0.9rem', textAlign: 'center' }}>
@@ -110,32 +110,8 @@ export default function Terminal() {
         </div>
       )}
 
-      {/* Header Premium */}
-      <header className="glass-panel" style={{ borderRadius: 0, borderTop: 0, borderLeft: 0, borderRight: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ padding: '8px', background: 'var(--accent-primary)', borderRadius: '8px' }}>
-                <Store size={20} color="white" />
-            </div>
-            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{storeInfo?.name || "Carregando..."}</h2>
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: isConnected ? 'var(--success)' : 'var(--danger)', fontWeight: '600' }}>
-                {isConnected ? <><Wifi size={18}/> Online</> : <><WifiOff size={18}/> Offline</>}
-            </div>
-            <button 
-                onClick={() => { sessionStorage.removeItem('ouroboros_token'); navigate('/'); }} 
-                className="btn btn-outline" 
-                style={{ padding: '6px 12px', fontSize: '0.8rem', gap: '4px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                title="Sair do Terminal"
-            >
-                <LogOut size={16} /> Sair
-            </button>
-        </div>
-      </header>
-
       {/* Main Terminal Area */}
-      <main style={{ flex: 1, padding: '32px', display: 'grid', gridTemplateColumns: 'minmax(350px, 1fr) minmax(350px, 1fr)', gap: '32px' }}>
+      <div style={{ flex: 1, padding: '32px', display: 'grid', gridTemplateColumns: 'minmax(350px, 1fr) minmax(350px, 1fr)', gap: '32px' }}>
           
           {/* Coluna 1: Buscar Comanda & Debitar */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -176,7 +152,7 @@ export default function Terminal() {
                         </div>
                     </div>
 
-                    <div style={{ marginTop: '32px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ marginTop: '32px', padding: '16px', background: 'var(--element-bg)', borderRadius: '8px', textAlign: 'center' }}>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '1px' }}>TOTAL A DEBITAR</p>
                         <h2 style={{ fontSize: '2.5rem', margin: '8px 0', color: cartTotal > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                             {cartTotal} ETC
@@ -219,7 +195,7 @@ export default function Terminal() {
 
           {/* Coluna 2: Carrinho */}
           <div className="glass-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-             <div style={{ background: 'rgba(0,0,0,0.3)', padding: '24px', borderBottom: '1px solid var(--border-glass)' }}>
+             <div style={{ background: 'var(--element-bg)', padding: '24px', borderBottom: '1px solid var(--border-glass)' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                     <ShoppingCart size={20} color="var(--accent-primary)"/> Terminal de Vendas
                 </h3>
@@ -246,7 +222,7 @@ export default function Terminal() {
                     
                     {/* Lista Flutuante de Dropdown */}
                     {isDropdownOpen && searchQuery && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#0f111a', border: '1px solid var(--border-glass)', borderRadius: '8px', marginTop: '4px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', maxHeight: '200px', overflowY: 'auto' }}>
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '8px', marginTop: '4px', boxShadow: '0 10px 30px var(--input-bg-focus)', maxHeight: '200px', overflowY: 'auto' }}>
                             {filteredCategories.length > 0 ? (
                                 filteredCategories.map(cat => (
                                     <div 
@@ -281,7 +257,7 @@ export default function Terminal() {
                             </div>
                             
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '4px', borderRadius: '4px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--input-bg)', padding: '4px', borderRadius: '4px' }}>
                                     <button type="button" onClick={() => updateQuantity(item.id, -1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '4px' }}><Minus size={14}/></button>
                                     <span style={{ minWidth: '20px', textAlign: 'center', fontWeight: 'bold' }}>{item.quantity}</span>
                                     <button type="button" onClick={() => updateQuantity(item.id, 1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '4px' }}><Plus size={14}/></button>
@@ -302,7 +278,7 @@ export default function Terminal() {
                  </div>
              </div>
           </div>
-      </main>
-    </div>
+      </div>
+    </Layout>
   )
 }

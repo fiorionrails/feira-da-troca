@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Rocket, Store, TerminalSquare } from 'lucide-react'
+import { Store, TerminalSquare } from 'lucide-react'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -21,11 +21,20 @@ export default function Login() {
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       <form onSubmit={handleLogin} className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '400px', textAlign: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-          <Rocket size={48} color="var(--accent-primary)" style={{ filter: 'drop-shadow(0 0 10px var(--accent-glow))' }}/>
+          <img
+            src="/ouroboros.png"
+            alt="Ouroboros"
+            style={{
+              width: '80px',
+              height: '80px',
+              filter: 'drop-shadow(0 0 12px var(--lime-glow))',
+              animation: 'spin 20s linear infinite'
+            }}
+          />
         </div>
-        <h2 style={{ marginBottom: '8px' }}>Ouroboros Ledger</h2>
+        <h2 style={{ marginBottom: '8px', color: 'var(--text-main)' }}>Ouroboros</h2>
         <p style={{ color: 'var(--text-muted)', marginBottom: '32px', fontSize: '0.9rem' }}>
-          Sistema de Transações Locais
+          Economia Circular Sustentável
         </p>
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>

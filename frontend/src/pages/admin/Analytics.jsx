@@ -5,10 +5,11 @@ import {
   PieChart, Pie, Cell,
   BarChart, Bar
 } from 'recharts'
-import { Activity, Users, Coins, TrendingUp, Store, Zap, ArrowLeft, ShoppingCart } from 'lucide-react'
+import { Activity, Users, Coins, TrendingUp, Store, ShoppingCart } from 'lucide-react'
 import { BACKEND_HTTP, BACKEND_WS } from '../../config'
+import Layout from '../../components/Layout'
 
-const COLORS = ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5', '#065f46', '#047857', '#059669']
+const COLORS = ['#349754', '#42b368', '#56c67c', '#6bd890', '#7feba4', '#2a7a43', '#226535', '#1a5027']
 
 function AnimatedNumber({ value, suffix = '' }) {
   const [display, setDisplay] = useState(0)
@@ -38,8 +39,8 @@ function AnimatedNumber({ value, suffix = '' }) {
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background: '#0f111a', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
-      <p style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '8px' }}>{label}</p>
+    <div style={{ background: '#0a0a0a', border: '1px solid var(--border-lime)', borderRadius: '8px', padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '8px' }}>{label}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color, fontSize: '0.9rem', fontWeight: 600 }}>
           {p.name}: {p.value}
@@ -107,46 +108,38 @@ export default function Analytics() {
 
   if (!data) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <Activity size={48} color="var(--accent-primary)" style={{ animation: 'fadeIn 1s infinite alternate' }} />
-          <p style={{ marginTop: '16px', color: 'var(--text-muted)' }}>Carregando dados da feira...</p>
+      <Layout role="analytics" isConnected={true}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <Activity size={48} color="var(--lime-primary)" style={{ animation: 'fadeIn 1s infinite alternate' }} />
+            <p style={{ marginTop: '16px', color: 'var(--text-muted)' }}>Carregando dados da feira...</p>
+          </div>
         </div>
-      </div>
+      </Layout>
     )
   }
 
   const { kpis, transactions_per_minute, top_stores, category_distribution } = data
 
   const kpiCards = [
-    { key: 'total_comandas', label: 'Comandas', value: kpis.total_comandas, icon: Users, suffix: '', color: '#10b981' },
-    { key: 'total_emitido', label: 'Total Emitido', value: kpis.total_emitido, icon: TrendingUp, suffix: ' ETC', color: '#34d399' },
+    { key: 'total_comandas', label: 'Comandas', value: kpis.total_comandas, icon: Users, suffix: '', color: '#349754' },
+    { key: 'total_emitido', label: 'Total Emitido', value: kpis.total_emitido, icon: TrendingUp, suffix: ' ETC', color: '#42b368' },
     { key: 'total_gasto', label: 'Total Gasto', value: kpis.total_gasto, icon: ShoppingCart, suffix: ' ETC', color: '#ef4444' },
     { key: 'total_circulante', label: 'Em Circulação', value: kpis.total_circulante, icon: Coins, suffix: ' ETC', color: '#f59e0b' },
-    { key: 'total_transacoes', label: 'Transações', value: kpis.total_transacoes, icon: Activity, suffix: '', color: '#8b5cf6' },
-    { key: 'lojas_ativas', label: 'Lojas', value: kpis.lojas_ativas, icon: Store, suffix: '', color: '#06b6d4' },
+    { key: 'total_transacoes', label: 'Transações', value: kpis.total_transacoes, icon: Activity, suffix: '', color: '#56c67c' },
+    { key: 'lojas_ativas', label: 'Lojas', value: kpis.lojas_ativas, icon: Store, suffix: '', color: '#6bd890' },
   ]
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-      {/* Header */}
-      <header className="glass-panel" style={{ borderRadius: 0, borderTop: 0, borderLeft: 0, borderRight: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', background: 'rgba(16, 185, 129, 0.03)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={() => navigate('/admin')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <ArrowLeft size={20} />
-          </button>
-          <Activity size={22} color="var(--accent-primary)" />
-          <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--accent-primary)' }}>Analytics — Feira da Troca</h2>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--success)', fontSize: '0.85rem' }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', animation: 'fadeIn 1s infinite alternate' }} />
-          Ao vivo · atualiza a cada 3s
-        </div>
-      </header>
+    <Layout role="analytics" isConnected={true}>
+      {/* Info Bar */}
+      <div style={{ padding: '12px 24px', background: 'rgba(52, 151, 84, 0.05)', borderBottom: '1px solid var(--border-lime)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--lime-primary)', animation: 'fadeIn 1s infinite alternate' }} />
+        <span style={{ color: 'var(--lime-primary)', fontSize: '0.85rem', fontWeight: 600 }}>Ao vivo · atualiza a cada 3s</span>
+      </div>
 
       {/* Scrollable Content */}
-      <main style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
         {/* KPI Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
@@ -293,7 +286,7 @@ export default function Analytics() {
                   className={i === 0 ? 'animate-fade-in' : ''}
                   style={{
                     padding: '12px 16px',
-                    background: 'rgba(0,0,0,0.2)',
+                    background: 'var(--element-bg)',
                     borderLeft: `3px solid ${evt.type === 'comanda_created' ? 'var(--accent-primary)' : 'var(--danger)'}`,
                     borderRadius: '4px',
                     fontSize: '0.85rem'
@@ -315,7 +308,7 @@ export default function Analytics() {
           </div>
         </div>
 
-      </main>
-    </div>
+      </div>
+    </Layout>
   )
 }

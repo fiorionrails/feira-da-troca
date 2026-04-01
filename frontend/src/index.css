@@ -1,21 +1,60 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* Colors - Premium Dark Neon Theme (Green Accents) */
-  --bg-dark: #0f111a; /* Neutral Dark Slate */
-  --bg-glass: rgba(20, 22, 30, 0.85); /* More opaque, less confusing see-through */
-  --border-glass: rgba(16, 185, 129, 0.25); /* Tighter border tint */
-  --accent-primary: #10b981; /* Emerald Accent */
-  --accent-glow: rgba(16, 185, 129, 0.15); /* Reduced glow */
-  --success: #34d399; /* Lighter Emerald for nested success items */
-  --danger: #ef4444; /* Keep red for danger/errors */
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8; /* Neutral muted text */
-  
-  /* Glassmorphism Tokens (Sober Matte Finish) */
-  --glass-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.5); /* Tighter, cleaner shadows */
+  /* Paleta Sustentável: Verde Ouroboros + Preto/Branco - MODO ESCURO */
+  --bg-dark: #0a0a0a; /* Preto profundo */
+  --bg-card: #1a1a1a; /* Cinza escuro para cards */
+  --bg-glass: rgba(26, 26, 26, 0.9); /* Glass com base escura */
+
+  --lime-primary: #349754; /* Verde sustentável Ouroboros */
+  --lime-light: #42b368; /* Verde claro - hover/accent */
+  --lime-glow: rgba(52, 151, 84, 0.2); /* Glow suave */
+
+  --text-main: #ffffff; /* Branco puro */
+  --text-muted: #737373; /* Cinza neutro */
+  --text-dark: #262626; /* Texto em fundos claros */
+
+  --danger: #ef4444; /* Vermelho para erros */
+  --warning: #f59e0b; /* Laranja para avisos */
+
+  /* Tokens de Design */
+  --glass-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.6);
   --glass-blur: blur(20px);
-  --border-radius: 16px;
+  --border-radius: 12px;
+  --border-lime: rgba(52, 151, 84, 0.3);
+
+  /* Backgrounds de inputs e elementos */
+  --input-bg: rgba(0, 0, 0, 0.3);
+  --input-bg-focus: rgba(0, 0, 0, 0.5);
+  --element-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* MODO CLARO - APENAS PRETO E BRANCO */
+[data-theme="light"] {
+  --bg-dark: #ffffff; /* Branco puro - fundo principal */
+  --bg-card: #ffffff; /* Branco puro para cards */
+  --bg-glass: rgba(255, 255, 255, 0.95); /* Glass branco */
+
+  --lime-primary: #349754; /* Verde sustentável (mantém) */
+  --lime-light: #2a7a43; /* Verde mais escuro para hover */
+  --lime-glow: rgba(52, 151, 84, 0.12); /* Glow bem sutil */
+
+  --text-main: #000000; /* PRETO PURO para texto principal */
+  --text-muted: #000000; /* PRETO PURO - sem cinza! */
+  --text-dark: #000000; /* PRETO PURO */
+
+  --danger: #dc2626; /* Vermelho mais escuro */
+  --warning: #d97706; /* Laranja mais escuro */
+
+  /* Tokens de Design */
+  --glass-shadow: 0 1px 8px 0 rgba(0, 0, 0, 0.1);
+  --glass-blur: blur(8px);
+  --border-lime: rgba(52, 151, 84, 0.4);
+
+  /* Backgrounds de inputs e elementos - MODO CLARO */
+  --input-bg: rgba(52, 151, 84, 0.05); /* Verde clarinho */
+  --input-bg-focus: rgba(52, 151, 84, 0.1); /* Verde um pouco mais forte no foco */
+  --element-bg: rgba(52, 151, 84, 0.05); /* Verde clarinho para outros elementos */
 }
 
 * {
@@ -32,8 +71,9 @@ body {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-  /* Fundo escuro discreto e profissional */
-  background-image: radial-gradient(circle at 50% 0%, #1a1e2b 0%, var(--bg-dark) 80%);
+  /* Gradiente sutil com toque de verde sustentável */
+  background-image: radial-gradient(circle at 50% 0%, rgba(52, 151, 84, 0.05) 0%, var(--bg-dark) 60%);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #root {
@@ -47,7 +87,7 @@ body {
   background: var(--bg-glass);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--border-glass);
+  border: 1px solid var(--border-lime);
   border-radius: var(--border-radius);
   box-shadow: var(--glass-shadow);
   padding: 24px;
@@ -62,8 +102,8 @@ h1, h2, h3 {
 
 /* Botões Modernos e Animados */
 .btn {
-  background: var(--accent-primary);
-  color: white;
+  background: var(--lime-primary);
+  color: var(--bg-dark);
   border: none;
   padding: 12px 24px;
   border-radius: 8px;
@@ -80,33 +120,46 @@ h1, h2, h3 {
 
 .btn:hover {
   transform: translateY(-2px);
-  filter: brightness(1.1);
+  background: var(--lime-light);
+  box-shadow: 0 4px 20px var(--lime-glow);
 }
 
 .btn:active {
   transform: translateY(0);
 }
 
-.btn-success { background: var(--success); }
-.btn-success:hover { background: #10b981; }
+.btn-success {
+  background: var(--lime-primary);
+  color: var(--bg-dark);
+}
+.btn-success:hover {
+  background: var(--lime-light);
+}
 
-.btn-danger { background: var(--danger); }
-.btn-danger:hover { background: #dc2626; }
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+.btn-danger:hover {
+  background: #dc2626;
+}
 
 .btn-outline {
   background: transparent;
-  border: 1px solid var(--border-glass);
+  border: 1px solid var(--border-lime);
+  color: var(--lime-primary);
   box-shadow: none;
 }
 .btn-outline:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--lime-glow);
+  border-color: var(--lime-primary);
   box-shadow: none;
 }
 
 /* Inputs Premium */
 .input-premium {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--border-glass);
+  background: var(--input-bg);
+  border: 1px solid var(--border-lime);
   color: var(--text-main);
   padding: 14px 16px;
   border-radius: 8px;
@@ -118,8 +171,9 @@ h1, h2, h3 {
 
 .input-premium:focus {
   outline: none;
-  border-color: var(--accent-primary);
-  background: rgba(0, 0, 0, 0.4);
+  border-color: var(--lime-primary);
+  background: var(--input-bg-focus);
+  box-shadow: 0 0 0 3px var(--lime-glow);
 }
 
 .input-premium::placeholder {

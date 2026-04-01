@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { TerminalSquare, ShieldAlert, Plus, Coins, Zap, LogOut, ShoppingCart, X, Minus, Store, RefreshCw, Copy, Check, Activity } from 'lucide-react'
+import { Plus, Coins, ShoppingCart, X, Minus, Store, RefreshCw, Copy, Check } from 'lucide-react'
 import { useAdminWebSocket } from '../../hooks/useAdminWebSocket'
 import { useNavigate } from 'react-router-dom'
 import { BACKEND_HTTP } from '../../config'
+import Layout from '../../components/Layout'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -212,8 +213,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-
+    <Layout role="admin" isConnected={isConnected}>
       {/* Auth error banner */}
       {wsError && (
         <div style={{ padding: '10px 24px', background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid var(--danger)', color: 'var(--danger)', fontSize: '0.9rem', textAlign: 'center' }}>
@@ -221,47 +221,19 @@ export default function Dashboard() {
         </div>
       )}
 
-      <header className="glass-panel" style={{ borderRadius: 0, borderTop: 0, borderLeft: 0, borderRight: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', background: 'rgba(16, 185, 129, 0.05)', borderColor: 'var(--accent-primary)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <TerminalSquare size={24} color="var(--accent-primary)" />
-            <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--accent-primary)' }}>Banco Organizador</h2>
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: isConnected ? 'var(--success)' : 'var(--danger)', fontWeight: '600', fontSize: '0.9rem' }}>
-                {isConnected ? <><Zap size={16}/> Sincronizado</> : <><ShieldAlert size={16}/> Offline</>}
-            </div>
-            
-            <button 
-                onClick={() => setShowStoreModal(true)} 
-                className="btn btn-outline" 
-                style={{ padding: '6px 12px', fontSize: '0.8rem', gap: '6px', borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }}
-                title="Sair do Terminal"
-            >
-                <Store size={16} /> Gerenciar Lojas
-            </button>
-
-            <button 
-                onClick={() => navigate('/analytics')} 
-                className="btn btn-outline" 
-                style={{ padding: '6px 12px', fontSize: '0.8rem', gap: '6px', borderColor: '#8b5cf6', color: '#8b5cf6' }}
-            >
-                <Activity size={16} /> Analytics
-            </button>
-
-            <button 
-                onClick={() => { sessionStorage.removeItem('ouroboros_token'); navigate('/'); }} 
-                className="btn btn-outline" 
-                style={{ padding: '6px 12px', fontSize: '0.8rem', gap: '4px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                title="Sair do Terminal"
-            >
-                <LogOut size={16} /> Sair
-            </button>
-        </div>
-      </header>
+      {/* Action Bar - Gerenciar Lojas */}
+      <div style={{ padding: '16px 32px', background: 'rgba(132, 204, 22, 0.05)', borderBottom: '1px solid var(--border-lime)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+        <button
+          onClick={() => setShowStoreModal(true)}
+          className="btn btn-outline"
+          style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+        >
+          <Store size={16} /> Gerenciar Lojas
+        </button>
+      </div>
 
       {/* Main Grid: Mudei para 3 colunas, a do meio virou o Cart */}
-      <main style={{ flex: 1, padding: '32px', display: 'grid', gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(350px, 1fr) 1fr', gap: '32px' }}>
+      <div style={{ flex: 1, padding: '32px', display: 'grid', gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(350px, 1fr) 1fr', gap: '32px' }}>
         
         {/* Coluna 1: Comanda — Nova ou Existente */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -306,7 +278,7 @@ export default function Dashboard() {
                                     required
                                 />
                             </div>
-                            <div style={{ marginTop: '16px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', textAlign: 'center' }}>
+                            <div style={{ marginTop: '16px', padding: '16px', background: 'var(--element-bg)', borderRadius: '8px', textAlign: 'center' }}>
                                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '1px' }}>A DEPOSITAR</p>
                                 <h2 style={{ fontSize: '2.5rem', margin: '8px 0', color: cartTotal > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                                     {cartTotal} ETC
@@ -352,7 +324,7 @@ export default function Dashboard() {
                                 </div>
                             )}
 
-                            <div style={{ marginTop: '8px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', textAlign: 'center' }}>
+                            <div style={{ marginTop: '8px', padding: '16px', background: 'var(--element-bg)', borderRadius: '8px', textAlign: 'center' }}>
                                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '1px' }}>A ADICIONAR</p>
                                 <h2 style={{ fontSize: '2.5rem', margin: '8px 0', color: cartTotal > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                                     +{cartTotal} ETC
@@ -370,7 +342,7 @@ export default function Dashboard() {
 
         {/* Coluna 2: Carrinho de Avaliação */}
         <div className="glass-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-             <div style={{ background: 'rgba(0,0,0,0.3)', padding: '24px', borderBottom: '1px solid var(--border-glass)' }}>
+             <div style={{ background: 'var(--element-bg)', padding: '24px', borderBottom: '1px solid var(--border-glass)' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                     <ShoppingCart size={20} color="var(--accent-primary)"/> Carrinho Ouroboros
                 </h3>
@@ -397,7 +369,7 @@ export default function Dashboard() {
                     
                     {/* Lista Flutuante de Dropdown */}
                     {isDropdownOpen && searchQuery && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#0f111a', border: '1px solid var(--border-glass)', borderRadius: '8px', marginTop: '4px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', maxHeight: '200px', overflowY: 'auto' }}>
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '8px', marginTop: '4px', boxShadow: '0 10px 30px var(--input-bg-focus)', maxHeight: '200px', overflowY: 'auto' }}>
                             {filteredCategories.length > 0 && filteredCategories.map(cat => (
                                 <div 
                                     key={cat.id} 
@@ -437,7 +409,7 @@ export default function Dashboard() {
                             </div>
                             
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '4px', borderRadius: '4px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--input-bg)', padding: '4px', borderRadius: '4px' }}>
                                     <button type="button" onClick={() => updateQuantity(item.id, -1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '4px' }}><Minus size={14}/></button>
                                     <span style={{ minWidth: '20px', textAlign: 'center', fontWeight: 'bold' }}>{item.quantity}</span>
                                     <button type="button" onClick={() => updateQuantity(item.id, 1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '4px' }}><Plus size={14}/></button>
@@ -471,7 +443,7 @@ export default function Dashboard() {
                     [...economyStream, ...recentComandas]
                     .sort((a,b) => -1)
                     .map((evt, idx) => (
-                        <div key={idx} style={{ padding: '16px', background: 'rgba(0,0,0,0.2)', borderLeft: `3px solid ${evt.type === 'comanda_created' ? 'var(--accent-primary)' : evt.type === 'credit_added' ? 'var(--success)' : 'var(--danger)'}`, borderRadius: '4px' }}>
+                        <div key={idx} style={{ padding: '16px', background: 'var(--element-bg)', borderLeft: `3px solid ${evt.type === 'comanda_created' ? 'var(--accent-primary)' : evt.type === 'credit_added' ? 'var(--success)' : 'var(--danger)'}`, borderRadius: '4px' }}>
                             {evt.type === 'comanda_created' 
                                 ? <><strong style={{ color: 'var(--accent-primary)' }}>+{evt.code}:</strong> Criada para <b>{evt.holder_name}</b> com inicial de {evt.balance} ETC</>
                                 : evt.type === 'credit_added'
@@ -487,7 +459,7 @@ export default function Dashboard() {
             </div>
         </div>
 
-      </main>
+      </div>
 
       {/* MODAL DE LOJAS */}
       {showStoreModal && (
@@ -530,7 +502,7 @@ export default function Dashboard() {
                                 <div>
                                     <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem' }}>{store.name}</h3>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <code style={{ background: 'rgba(0,0,0,0.5)', padding: '6px 12px', borderRadius: '4px', fontSize: '0.9rem', color: 'var(--accent-primary)' }}>
+                                        <code style={{ background: 'var(--input-bg-focus)', padding: '6px 12px', borderRadius: '4px', fontSize: '0.9rem', color: 'var(--accent-primary)' }}>
                                             {store.terminal_token}
                                         </code>
                                         <button 
@@ -561,6 +533,6 @@ export default function Dashboard() {
         </div>
       )}
 
-    </div>
+    </Layout>
   )
 }
