@@ -14,3 +14,13 @@ node_modules
 __pycache__/
 *.pyc
 *.pyo
+
+# Build and binary artifacts
+node_modules/
+dist/
+build/
+bin/
+*.exe
+*.node
+*.spec
+*.db*

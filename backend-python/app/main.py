@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.ws_admin import router as admin_ws_router
 from app.api.ws_store import router as store_ws_router
+from app.api.ws_packing import router as packing_ws_router
 from app.api.rest import router as rest_router
 from app.config import settings
 import logging
@@ -27,6 +28,7 @@ app.add_middleware(
 
 app.include_router(admin_ws_router)
 app.include_router(store_ws_router)
+app.include_router(packing_ws_router)
 app.include_router(rest_router)
 
 @app.get("/")

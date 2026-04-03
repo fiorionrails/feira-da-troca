@@ -9,6 +9,7 @@ export function useAdminWebSocket() {
   const [recentComandas, setRecentComandas] = useState([])
   const [economyStream, setEconomyStream] = useState([])
   const [wsError, setWsError] = useState(null)
+  const [lastCategoryUpdate, setLastCategoryUpdate] = useState(0)
 
   const ws = useRef(null)
 
@@ -47,7 +48,9 @@ export function useAdminWebSocket() {
             setRecentComandas(prev => [{ ...msg, type: 'credit_added', _ts: Date.now() }, ...prev].slice(0, 10))
             break
           case 'category_updated':
-            // Category changes are reflected on next categories fetch; no local state needed
+            console.log('[WS] Nova categoria detectada! Avisando Dashboard...');
+            setRecentComandas(prev => [{ type: 'category_updated', name: msg.category.name, _ts: Date.now() }, ...prev].slice(0, 10))
+            setLastCategoryUpdate(Date.now())
             break
         }
       }
@@ -98,6 +101,6 @@ export function useAdminWebSocket() {
     }
   }, [])
 
-  return { isConnected, nextCode, recentComandas, economyStream, wsError, createComanda, addCredit }
+  return { isConnected, nextCode, recentComandas, economyStream, wsError, createComanda, addCredit, lastCategoryUpdate }
 }
 

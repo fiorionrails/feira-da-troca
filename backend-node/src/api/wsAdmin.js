@@ -4,18 +4,7 @@ const { getNextCode, createComanda, getComandaByCode, getBalance } = require('..
 const { processCredit } = require('../services/transactionService');
 const { createOrUpdateCategory } = require('../services/productService');
 
-const adminConnections = new Set();
-
-function broadcastToAdmins(message) {
-  const data = JSON.stringify(message);
-  for (const ws of adminConnections) {
-    try {
-      if (ws.readyState === ws.OPEN) ws.send(data);
-    } catch {
-      adminConnections.delete(ws);
-    }
-  }
-}
+const { adminConnections, broadcastToAdmins } = require('./wsRegistry');
 
 function handleAdminConnection(ws, token) {
   if (token !== config.adminToken) {
