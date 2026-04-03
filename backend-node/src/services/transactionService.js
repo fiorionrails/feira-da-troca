@@ -7,7 +7,9 @@ class InsufficientBalanceError extends Error {}
 class InvalidAmountError extends Error {}
 
 function processDebit(db, comandaId, amount, storeId, note = null) {
-  if (amount <= 0) throw new InvalidAmountError('Debit amount must be greater than zero.');
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new InvalidAmountError('Debit amount must be a positive integer.');
+  }
 
   const insertEvent = db.prepare(
     'INSERT INTO events (id, type, comanda_id, store_id, amount, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -30,7 +32,9 @@ function processDebit(db, comandaId, amount, storeId, note = null) {
 }
 
 function processCredit(db, comandaId, amount, storeId = null, note = null) {
-  if (amount <= 0) throw new InvalidAmountError('Credit amount must be greater than zero.');
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new InvalidAmountError('Credit amount must be a positive integer.');
+  }
 
   const eventId = uuidv4();
   const createdAt = nowIso();

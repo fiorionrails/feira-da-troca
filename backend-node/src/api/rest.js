@@ -5,6 +5,7 @@ const { getDb } = require('../database');
 const config = require('../config');
 const { getComandaByCode, getBalance } = require('../services/comandaService');
 const { createOrUpdateCategory } = require('../services/productService');
+const { disconnectStoreById } = require('./wsStore');
 
 const router = express.Router();
 
@@ -57,7 +58,7 @@ router.get('/stores', adminAuth, (req, res) => {
 });
 
 router.post('/stores', adminAuth, (req, res) => {
-  const { name } = req.body;
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
   if (!name) return res.status(400).json({ detail: 'name is required' });
   const db = getDb();
   const newId = uuidv4();
@@ -69,7 +70,7 @@ router.post('/stores', adminAuth, (req, res) => {
 });
 
 router.put('/stores/:storeId', adminAuth, (req, res) => {
-  const { name } = req.body;
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
   if (!name) return res.status(400).json({ detail: 'name is required' });
   const db = getDb();
   const info = db.prepare('UPDATE stores SET name = ? WHERE id = ?').run(name, req.params.storeId);
@@ -82,6 +83,7 @@ router.post('/stores/:storeId/revoke_token', adminAuth, (req, res) => {
   const newToken = generateStoreToken();
   const info = db.prepare('UPDATE stores SET terminal_token = ? WHERE id = ?').run(newToken, req.params.storeId);
   if (info.changes === 0) return res.status(404).json({ detail: 'Store not found' });
+  disconnectStoreById(req.params.storeId);
   res.json({ id: req.params.storeId, new_token: newToken });
 });
 
@@ -93,8 +95,10 @@ router.get('/categories', (req, res) => {
 });
 
 router.post('/categories', adminAuth, (req, res) => {
-  const { name, price } = req.body;
-  if (!name || price === undefined) return res.status(400).json({ detail: 'name and price are required' });
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  const price = Number(req.body.price);
+  if (!name) return res.status(400).json({ detail: 'name is required' });
+  if (!Number.isInteger(price) || price <= 0) return res.status(400).json({ detail: 'price must be a positive integer' });
   const db = getDb();
   const existing = db.prepare('SELECT id FROM categories WHERE LOWER(name) = LOWER(?)').get(name);
   if (existing) return res.status(400).json({ detail: 'Categoria já existe' });

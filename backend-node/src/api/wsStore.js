@@ -3,6 +3,10 @@ const { getStoreByToken } = require('../services/storeService');
 const { getComandaByCode, getBalance } = require('../services/comandaService');
 const { processDebit, InsufficientBalanceError, InvalidAmountError } = require('../services/transactionService');
 const { broadcastToAdmins } = require('./wsAdmin');
+const { parsePositiveInt } = require('../utils');
+
+const MAX_STORE_CONNECTIONS = 100;
+const WS_RATE_LIMIT_MAX = 60; // messages per minute per connection
 
 const storeConnections = new Set();
 
@@ -17,6 +21,19 @@ function broadcastToStores(message) {
   }
 }
 
+/**
+ * Closes all active WebSocket connections for a specific store.
+ * Called when a store's token is revoked via the REST API.
+ */
+function disconnectStoreById(storeId) {
+  for (const ws of storeConnections) {
+    if (ws._storeId === storeId) {
+      try { ws.close(1008, 'Token revoked'); } catch {}
+      storeConnections.delete(ws);
+    }
+  }
+}
+
 function handleStoreConnection(ws, token) {
   const db = getDb();
   const store = getStoreByToken(db, token);
@@ -26,7 +43,16 @@ function handleStoreConnection(ws, token) {
     return;
   }
 
+  if (storeConnections.size >= MAX_STORE_CONNECTIONS) {
+    ws.close(1008, 'Max connections reached');
+    return;
+  }
+
+  ws._storeId = store.id;
   storeConnections.add(ws);
+
+  let rateCount = 0;
+  let rateWindowStart = Date.now();
 
   ws.send(JSON.stringify({
     type: 'connected',
@@ -36,10 +62,21 @@ function handleStoreConnection(ws, token) {
   }));
 
   ws.on('message', (rawData) => {
+    const now = Date.now();
+    if (now - rateWindowStart > 60000) {
+      rateCount = 0;
+      rateWindowStart = now;
+    }
+    if (++rateCount > WS_RATE_LIMIT_MAX) {
+      ws.send(JSON.stringify({ type: 'error', reason: 'rate_limit_exceeded' }));
+      return;
+    }
+
     let data;
     try {
       data = JSON.parse(rawData.toString());
-    } catch {
+    } catch (err) {
+      console.error('Store WS message parse error:', err.message);
       return;
     }
 
@@ -47,8 +84,19 @@ function handleStoreConnection(ws, token) {
     const msgType = data.type;
 
     if (msgType === 'debit_request') {
-      const code = data.comanda_code;
-      const amount = parseInt(data.amount || 0, 10);
+      const code = typeof data.comanda_code === 'string'
+        ? data.comanda_code.trim().toUpperCase()
+        : '';
+      if (!code) {
+        ws.send(JSON.stringify({ type: 'debit_rejected', reason: 'comanda_not_found', requested: 0 }));
+        return;
+      }
+
+      const amount = parsePositiveInt(data.amount);
+      if (amount === null) {
+        ws.send(JSON.stringify({ type: 'debit_rejected', reason: 'invalid_amount', requested: data.amount }));
+        return;
+      }
 
       const comanda = getComandaByCode(db, code);
       if (!comanda) {
@@ -102,7 +150,13 @@ function handleStoreConnection(ws, token) {
       }
 
     } else if (msgType === 'balance_query') {
-      const code = data.comanda_code;
+      const code = typeof data.comanda_code === 'string'
+        ? data.comanda_code.trim().toUpperCase()
+        : '';
+      if (!code) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'comanda_not_found' }));
+        return;
+      }
       const comanda = getComandaByCode(db, code);
       if (!comanda) {
         ws.send(JSON.stringify({ type: 'error', reason: 'comanda_not_found' }));
@@ -128,4 +182,4 @@ function handleStoreConnection(ws, token) {
   });
 }
 
-module.exports = { handleStoreConnection };
+module.exports = { handleStoreConnection, disconnectStoreById };

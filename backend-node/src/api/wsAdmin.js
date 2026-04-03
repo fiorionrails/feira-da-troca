@@ -3,6 +3,10 @@ const config = require('../config');
 const { getNextCode, createComanda, getComandaByCode, getBalance } = require('../services/comandaService');
 const { processCredit } = require('../services/transactionService');
 const { createOrUpdateCategory } = require('../services/productService');
+const { parsePositiveInt, parseNonNegativeInt } = require('../utils');
+
+const MAX_ADMIN_CONNECTIONS = 10;
+const WS_RATE_LIMIT_MAX = 120; // messages per minute per connection
 
 const adminConnections = new Set();
 
@@ -23,17 +27,36 @@ function handleAdminConnection(ws, token) {
     return;
   }
 
+  if (adminConnections.size >= MAX_ADMIN_CONNECTIONS) {
+    ws.close(1008, 'Max connections reached');
+    return;
+  }
+
   adminConnections.add(ws);
+
+  let rateCount = 0;
+  let rateWindowStart = Date.now();
 
   const db = getDb();
   const nextCode = getNextCode(db);
   ws.send(JSON.stringify({ type: 'connected', role: 'admin', next_code: nextCode }));
 
   ws.on('message', (rawData) => {
+    const now = Date.now();
+    if (now - rateWindowStart > 60000) {
+      rateCount = 0;
+      rateWindowStart = now;
+    }
+    if (++rateCount > WS_RATE_LIMIT_MAX) {
+      ws.send(JSON.stringify({ type: 'error', reason: 'rate_limit_exceeded' }));
+      return;
+    }
+
     let data;
     try {
       data = JSON.parse(rawData.toString());
-    } catch {
+    } catch (err) {
+      console.error('Admin WS message parse error:', err.message);
       return;
     }
 
@@ -41,17 +64,27 @@ function handleAdminConnection(ws, token) {
     const msgType = data.type;
 
     if (msgType === 'create_comanda') {
-      const holderName = data.holder_name;
-      const initialBalance = parseInt(data.initial_balance || 0, 10);
-      const cartItems = data.cart_items || [];
+      const holderName = typeof data.holder_name === 'string' ? data.holder_name.trim() : '';
+      if (!holderName) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'holder_name is required' }));
+        return;
+      }
+
+      const initialBalance = parseNonNegativeInt(data.initial_balance ?? 0);
+      if (initialBalance === null) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'invalid_amount' }));
+        return;
+      }
+
+      const cartItems = Array.isArray(data.cart_items) ? data.cart_items : [];
 
       try {
         const { comanda } = createComanda(db, holderName, initialBalance);
 
         for (const item of cartItems) {
-          const itemName = item.name || '';
-          const itemQty = parseInt(item.quantity || 0, 10);
-          if (itemName && itemQty > 0) {
+          const itemName = typeof item.name === 'string' ? item.name.trim() : '';
+          const itemQty = parsePositiveInt(item.quantity);
+          if (itemName && itemQty) {
             createOrUpdateCategory(db, itemName, 0, itemQty);
           }
         }
@@ -71,9 +104,21 @@ function handleAdminConnection(ws, token) {
       }
 
     } else if (msgType === 'add_credit') {
-      const comandaCode = (data.comanda_code || '').toUpperCase();
-      const amount = parseInt(data.amount || 0, 10);
-      const cartItems = data.cart_items || [];
+      const comandaCode = typeof data.comanda_code === 'string'
+        ? data.comanda_code.trim().toUpperCase()
+        : '';
+      if (!comandaCode) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'comanda_code is required' }));
+        return;
+      }
+
+      const amount = parsePositiveInt(data.amount);
+      if (amount === null) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'invalid_amount' }));
+        return;
+      }
+
+      const cartItems = Array.isArray(data.cart_items) ? data.cart_items : [];
 
       const comanda = getComandaByCode(db, comandaCode);
       if (!comanda) {
@@ -85,9 +130,9 @@ function handleAdminConnection(ws, token) {
         processCredit(db, comanda.id, amount, null, 'Crédito adicional');
 
         for (const item of cartItems) {
-          const itemName = item.name || '';
-          const itemQty = parseInt(item.quantity || 0, 10);
-          if (itemName && itemQty > 0) {
+          const itemName = typeof item.name === 'string' ? item.name.trim() : '';
+          const itemQty = parsePositiveInt(item.quantity);
+          if (itemName && itemQty) {
             createOrUpdateCategory(db, itemName, 0, itemQty);
           }
         }
@@ -106,9 +151,23 @@ function handleAdminConnection(ws, token) {
       }
 
     } else if (msgType === 'register_category') {
-      const name = data.name;
-      const price = parseInt(data.price || 0, 10);
-      const totalEntriesInc = parseInt(data.total_entries || 0, 10);
+      const name = typeof data.name === 'string' ? data.name.trim() : '';
+      if (!name) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'category name is required' }));
+        return;
+      }
+
+      const price = parseNonNegativeInt(data.price ?? 0);
+      if (price === null) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'invalid_amount' }));
+        return;
+      }
+
+      const totalEntriesInc = parseNonNegativeInt(data.total_entries ?? 0);
+      if (totalEntriesInc === null) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'invalid_amount' }));
+        return;
+      }
 
       try {
         const cat = createOrUpdateCategory(db, name, price, totalEntriesInc);

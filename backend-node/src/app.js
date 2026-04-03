@@ -14,7 +14,7 @@ const app = express();
 
 // Allow all origins — local-first design (private LAN, no external exposure)
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['*'] }));
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
 
 // Basic rate limiting — prevents abuse; generous limits for a local fair event
 const apiLimiter = rateLimit({
