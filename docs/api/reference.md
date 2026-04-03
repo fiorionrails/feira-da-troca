@@ -5,6 +5,9 @@ A API do Ouroboros é exposta na porta `8000` e é idêntica nos dois backends d
 - **Node.js** (`backend-node/`) — Express + better-sqlite3
 - **Python** (`backend-python/`) — FastAPI + Uvicorn *(ao usar o backend Python, a documentação interativa está disponível em `/docs` (Swagger UI) e `/redoc` (ReDoc) enquanto o servidor estiver rodando)*
 
+!!! note "Backend como fonte única de verdade"
+    **Toda a validação de dados é feita no backend.** O frontend nunca deve ser a única barreira de proteção contra entradas inválidas. Um frontend alternativo pode ser construído em qualquer tecnologia — o backend garante a integridade independentemente do cliente.
+
 ---
 
 ## Base URL
@@ -32,7 +35,9 @@ token: <admin_token>
 O valor do token é definido pela variável `ADMIN_TOKEN` no arquivo `.env`.
 
 !!! note "Rotas públicas"
-    A rota `GET /api/categories` é pública e não exige token — isso permite que os terminais de loja consultem o catálogo de preços.
+    As rotas `GET /api/categories` e `GET /api/reports/analytics` são **públicas e não exigem token**.
+    - `/categories` — os terminais de loja precisam consultar o catálogo de preços sem autenticação admin
+    - `/reports/analytics` — dados agregados para o telão/painel público do evento (sem dados individuais)
 
 ### WebSocket
 
@@ -45,7 +50,51 @@ ws://host/ws/store?token=<store_terminal_token>
 
 ---
 
+## Limites e restrições globais
+
+| Recurso | Limite |
+|---|---|
+| Tamanho máximo do body (REST) | `10 KB` |
+| Conexões admin simultâneas (WebSocket) | `10` |
+| Conexões de loja simultâneas (WebSocket) | `100` |
+| Mensagens por minuto por conexão WebSocket | Admin: `120` / Loja: `60` |
+| Máximo de comandas | Configurável via `MAX_COMANDAS` no `.env` (padrão: `1000`) |
+
+---
+
+## Regras de validação do backend
+
+O backend impõe as seguintes restrições em todas as entradas. **O frontend não precisa — e não deve — ser a única camada de validação.**
+
+| Campo | Regra |
+|---|---|
+| `holder_name` | String não vazia após trim. Obrigatório. |
+| `initial_balance` | Inteiro não-negativo (≥ 0). Ausente = 0. Se 0, nenhum evento de crédito inicial é criado. |
+| `amount` (crédito/débito) | Inteiro estritamente positivo (> 0). Rejeita floats, strings não-numéricas e NaN. |
+| `comanda_code` | Sempre normalizado: trim + uppercase. Formato esperado: `F001` a `F999+`. |
+| `name` (loja/categoria) | String não vazia após trim. Obrigatório. |
+| `price` (categoria via REST) | Inteiro estritamente positivo (> 0). |
+| `price` (categoria via WS `register_category`) | Inteiro não-negativo (≥ 0). Zero = sem alteração de preço, apenas incrementa contagem. |
+| `cart_items[].quantity` | Inteiro positivo. Itens com quantity inválida são silenciosamente ignorados. |
+
+---
+
 ## Rotas REST
+
+### Health check
+
+#### `GET /`
+
+Retorna o status do servidor.
+
+**Auth:** Pública
+
+**Response `200`:**
+```json
+{ "status": "online", "mode": "local-first", "event": "Feira da Troca 2025" }
+```
+
+---
 
 ### Relatórios
 
@@ -107,7 +156,7 @@ Retorna dados agregados para o dashboard analítico público (ideal para telão 
 
 #### `GET /api/comanda/{code}`
 
-Retorna os detalhes de uma comanda pelo código curto (ex: `F001`).
+Retorna os detalhes de uma comanda pelo código curto (ex: `F001`). O código é normalizado para maiúsculas automaticamente.
 
 **Auth:** Admin (`token` header)
 
@@ -159,6 +208,8 @@ Cria uma nova loja com token de terminal gerado automaticamente.
 }
 ```
 
+**Validação:** `name` deve ser uma string não vazia após trim.
+
 **Response `201`:**
 ```json
 {
@@ -171,6 +222,11 @@ Cria uma nova loja com token de terminal gerado automaticamente.
 !!! note "Formato do token de loja"
     O token gerado é uma string de **6 caracteres** alfanuméricos maiúsculos (ex: `XJ92KF`).
     O alfabeto exclui caracteres ambíguos (`0`, `O`, `1`, `I`) para facilitar a leitura e digitação em terminais de loja.
+
+**Erros:**
+```json
+{ "detail": "name is required" }   // 400
+```
 
 #### `PUT /api/stores/{store_id}`
 
@@ -185,9 +241,15 @@ Atualiza o nome de uma loja existente.
 }
 ```
 
+**Erros:**
+```json
+{ "detail": "name is required" }  // 400
+{ "detail": "Store not found" }   // 404
+```
+
 #### `POST /api/stores/{store_id}/revoke_token`
 
-Gera um novo token para a loja, invalidando o anterior imediatamente. Qualquer terminal usando o token antigo perde acesso ao tentar reconectar.
+Gera um novo token para a loja, **invalidando o anterior imediatamente**. Qualquer terminal WebSocket usando o token antigo é **desconectado na hora** (código WS `1008 Token revoked`).
 
 **Auth:** Admin
 
@@ -199,8 +261,8 @@ Gera um novo token para a loja, invalidando o anterior imediatamente. Qualquer t
 }
 ```
 
-!!! warning "Efeito da revogação"
-    Ao regerar o token, qualquer terminal de loja usando o token antigo será desconectado na próxima tentativa de reconexão. O novo token deve ser informado ao lojista para que ele possa acessar novamente.
+!!! warning "Efeito imediato da revogação"
+    Ao revogar o token, todos os terminais WebSocket ativos daquela loja são fechados imediatamente com código `1008`. O novo token deve ser informado ao lojista para reconexão.
 
 ---
 
@@ -225,8 +287,8 @@ Lista todas as categorias de produto cadastradas com seus preços.
 ]
 ```
 
-!!! note "Unidade de preço"
-    O campo `price` é armazenado em centavos fictícios. O frontend converte para ETECOINS dividindo por 100 (ex: `1500` → `15 ETC`).
+!!! note "Unidade de valor"
+    O campo `price` é armazenado em ETC inteiros (sem decimais). `1500` = 1500 ETC.
 
 #### `POST /api/categories`
 
@@ -242,6 +304,11 @@ Cria uma nova categoria de produto/preço.
 }
 ```
 
+**Validação:**
+- `name`: string não vazia após trim
+- `price`: inteiro estritamente positivo (> 0)
+- Nome duplicado (case-insensitive) é rejeitado
+
 **Response `201`:**
 ```json
 {
@@ -249,6 +316,13 @@ Cria uma nova categoria de produto/preço.
   "name": "Bolsa",
   "price": 1500
 }
+```
+
+**Erros:**
+```json
+{ "detail": "name is required" }                      // 400
+{ "detail": "price must be a positive integer" }      // 400
+{ "detail": "Categoria já existe" }                   // 400
 ```
 
 ---
@@ -274,7 +348,13 @@ Após conectar, o servidor envia:
 }
 ```
 
-Se o token for inválido, o servidor fecha a conexão com código `1008` e motivo `"Store Token Unauthorized"`.
+**Erros de conexão:**
+
+| Código WS | Motivo | Causa |
+|---|---|---|
+| `1008` | `Store Token Unauthorized` | Token inválido ou inexistente |
+| `1008` | `Max connections reached` | Limite de 100 conexões atingido |
+| `1008` | `Token revoked` | Token revogado pelo admin enquanto conectado |
 
 ---
 
@@ -282,7 +362,7 @@ Se o token for inválido, o servidor fecha a conexão com código `1008` e motiv
 
 #### `balance_query`
 
-Consulta o saldo de uma comanda sem realizar débito.
+Consulta o saldo de uma comanda sem realizar débito. O campo `comanda_code` é normalizado (trim + uppercase) antes da busca.
 
 ```json
 {
@@ -301,9 +381,14 @@ Consulta o saldo de uma comanda sem realizar débito.
 }
 ```
 
+**Erro:**
+```json
+{ "type": "error", "reason": "comanda_not_found" }
+```
+
 #### `debit_request`
 
-Solicita um débito em uma comanda.
+Solicita um débito em uma comanda. O `comanda_code` é normalizado automaticamente. O `amount` deve ser um inteiro positivo.
 
 ```json
 {
@@ -337,11 +422,16 @@ Solicita um débito em uma comanda.
 }
 ```
 
-Motivos possíveis de rejeição: `comanda_not_found`, `insufficient_balance`, `invalid_amount`.
+| `reason` | Causa |
+|---|---|
+| `comanda_not_found` | Código não existe ou veio vazio |
+| `insufficient_balance` | Saldo atual menor que o valor solicitado. Inclui `current_balance` e `requested`. |
+| `invalid_amount` | `amount` é zero, negativo, float ou não-numérico |
+| `server_error` | Erro interno inesperado |
 
 ---
 
-### Mensagens do Servidor → Todos os Terminais (broadcast)
+### Mensagens do Servidor → Todos os Terminais de Loja (broadcast)
 
 #### `balance_updated`
 
@@ -356,6 +446,16 @@ Disparado após qualquer débito confirmado no sistema. Permite que outros termi
   "store_id": "uuid-da-loja-que-debitou"
 }
 ```
+
+---
+
+### Mensagens de erro genéricas (loja)
+
+```json
+{ "type": "error", "reason": "rate_limit_exceeded" }
+```
+
+Enviado quando o terminal excede **60 mensagens por minuto**. O frontend deve implementar debounce ou throttle para evitar isso.
 
 ---
 
@@ -378,7 +478,12 @@ Após conectar:
 }
 ```
 
-Se o token for inválido, o servidor fecha a conexão com código `1008`.
+**Erros de conexão:**
+
+| Código WS | Motivo | Causa |
+|---|---|---|
+| `1008` | `Unauthorized` | Token admin inválido |
+| `1008` | `Max connections reached` | Limite de 10 conexões admin atingido |
 
 ---
 
@@ -400,9 +505,22 @@ Solicita a criação de uma nova comanda com saldo inicial. O campo `cart_items`
 }
 ```
 
+**Validação:**
+- `holder_name`: obrigatório, string não vazia após trim
+- `initial_balance`: inteiro não-negativo (≥ 0), ausente = 0. Se 0, nenhum evento de crédito inicial é gerado.
+- `cart_items`: opcional. Itens com `name` vazio ou `quantity` inválida são ignorados.
+
+**Erros:**
+```json
+{ "type": "error", "reason": "holder_name is required" }
+{ "type": "error", "reason": "invalid_amount" }
+{ "type": "error", "reason": "Maximum number of comandas (1000) reached" }
+{ "type": "error", "reason": "Concurrent comanda creation conflict. Please retry." }
+```
+
 #### `add_credit`
 
-Adiciona crédito extra a uma comanda já existente (Dual Mode do Banco). O campo `cart_items` segue a mesma lógica de `create_comanda`.
+Adiciona crédito extra a uma comanda já existente. O campo `cart_items` segue a mesma lógica de `create_comanda`.
 
 ```json
 {
@@ -413,6 +531,17 @@ Adiciona crédito extra a uma comanda já existente (Dual Mode do Banco). O camp
     { "name": "Jaqueta", "quantity": 1 }
   ]
 }
+```
+
+**Validação:**
+- `comanda_code`: obrigatório, normalizado (trim + uppercase)
+- `amount`: inteiro estritamente positivo (> 0)
+
+**Erros:**
+```json
+{ "type": "error", "reason": "comanda_code is required" }
+{ "type": "error", "reason": "invalid_amount" }
+{ "type": "error", "reason": "comanda_not_found" }
 ```
 
 #### `register_category`
@@ -426,6 +555,17 @@ Cadastra ou atualiza uma categoria/preço de produto.
   "price": 1500,
   "total_entries": 10
 }
+```
+
+**Validação:**
+- `name`: obrigatório, string não vazia após trim
+- `price`: inteiro não-negativo (≥ 0). Se 0, o preço existente não é alterado — apenas o `total_entries` é incrementado.
+- `total_entries`: inteiro não-negativo (≥ 0), ausente = 0
+
+**Erros:**
+```json
+{ "type": "error", "reason": "category name is required" }
+{ "type": "error", "reason": "invalid_amount" }
 ```
 
 ---
@@ -503,11 +643,64 @@ Notifica quando uma categoria de produto é criada ou atualizada.
 
 ---
 
-## Códigos de erro
+### Mensagens de erro genéricas (admin)
 
-| Código | Significado |
-|---|---|
-| `comanda_not_found` | Código da comanda não existe no sistema |
-| `insufficient_balance` | Saldo insuficiente para o débito |
-| `invalid_amount` | Valor inválido (zero, negativo, ou não-inteiro) |
-| `unauthorized` | Token ausente ou inválido (WebSocket fecha com código 1008) |
+```json
+{ "type": "error", "reason": "rate_limit_exceeded" }
+```
+
+Enviado quando o terminal excede **120 mensagens por minuto**.
+
+---
+
+## Códigos de erro — tabela consolidada
+
+### REST
+
+| Código HTTP | `detail` | Causa |
+|---|---|---|
+| `400` | `name is required` | Nome de loja ou categoria vazio ou só espaços |
+| `400` | `price must be a positive integer` | Preço zero, negativo ou não-inteiro em POST /categories |
+| `400` | `Categoria já existe` | Nome de categoria duplicado (case-insensitive) |
+| `401` | `Unauthorized` | Token ausente ou incorreto |
+| `404` | `Comanda não encontrada` | Código de comanda não existe |
+| `404` | `Store not found` | ID de loja não existe |
+
+### WebSocket — `reason` nos tipos `error` e `debit_rejected`
+
+| `reason` | Contexto | Causa |
+|---|---|---|
+| `holder_name is required` | Admin | `holder_name` ausente ou vazio |
+| `comanda_code is required` | Admin | `comanda_code` ausente ou vazio |
+| `category name is required` | Admin | `name` ausente ou vazio em `register_category` |
+| `comanda_not_found` | Admin / Loja | Código de comanda não existe |
+| `invalid_amount` | Admin / Loja | Valor zero, negativo, float ou não-numérico |
+| `insufficient_balance` | Loja | Saldo menor que o valor solicitado |
+| `server_error` | Loja | Erro interno inesperado |
+| `rate_limit_exceeded` | Admin / Loja | Excedeu o limite de mensagens por minuto |
+| `Maximum number of comandas (...) reached` | Admin | Limite configurado em `MAX_COMANDAS` atingido |
+| `Concurrent comanda creation conflict...` | Admin | Race condition em criação simultânea — tentar novamente |
+
+---
+
+## Construindo um frontend alternativo
+
+O backend é completamente autossuficiente. Qualquer frontend — ou nenhum frontend — pode ser usado. A única interface necessária são as conexões HTTP REST e WebSocket descritas acima.
+
+**Exemplo mínimo de fluxo para um Terminal de Loja:**
+
+1. Conectar via `ws://host:8000/ws/store?token=TOKEN`
+2. Aguardar `{ type: "connected" }` para confirmar autenticação
+3. Para consultar saldo: enviar `{ type: "balance_query", comanda_code: "F001" }`
+4. Para debitar: enviar `{ type: "debit_request", comanda_code: "F001", amount: 650 }`
+5. Tratar `debit_confirmed` (sucesso) ou `debit_rejected` (com `reason` específica)
+6. Implementar reconexão automática com backoff exponencial (o servidor não armazena estado de sessão)
+
+**Exemplo mínimo de fluxo para Terminal Banco/Admin:**
+
+1. Conectar via `ws://host:8000/ws/admin?token=ADMIN_TOKEN`
+2. Aguardar `{ type: "connected", next_code: "F001" }` para saber o próximo código disponível
+3. Para criar comanda: enviar `{ type: "create_comanda", holder_name: "João", initial_balance: 1000 }`
+4. Tratar `comanda_created` (broadcast para todos os admins) ou `{ type: "error", reason: "..." }`
+5. Para adicionar crédito extra: enviar `{ type: "add_credit", comanda_code: "F001", amount: 500 }`
+
