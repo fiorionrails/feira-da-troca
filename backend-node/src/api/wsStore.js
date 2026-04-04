@@ -1,4 +1,5 @@
 const { getDb } = require('../database');
+const log = require('../logger');
 const { getStoreByToken } = require('../services/storeService');
 const { getComandaByCode, getBalance } = require('../services/comandaService');
 const { processDebit, InsufficientBalanceError, InvalidAmountError } = require('../services/transactionService');
@@ -39,6 +40,7 @@ function handleStoreConnection(ws, token) {
   const store = getStoreByToken(db, token);
 
   if (!store) {
+    log.wsAuthFail('store');
     ws.close(1008, 'Store Token Unauthorized');
     return;
   }
@@ -50,6 +52,7 @@ function handleStoreConnection(ws, token) {
 
   ws._storeId = store.id;
   storeConnections.add(ws);
+  log.wsConnect('store', store.name, storeConnections.size);
 
   let rateCount = 0;
   let rateWindowStart = Date.now();
@@ -68,6 +71,7 @@ function handleStoreConnection(ws, token) {
       rateWindowStart = now;
     }
     if (++rateCount > WS_RATE_LIMIT_MAX) {
+      log.rateLimited('store', store.name);
       ws.send(JSON.stringify({ type: 'error', reason: 'rate_limit_exceeded' }));
       return;
     }
@@ -76,7 +80,7 @@ function handleStoreConnection(ws, token) {
     try {
       data = JSON.parse(rawData.toString());
     } catch (err) {
-      console.error('Store WS message parse error:', err.message);
+      log.serverError('wsStore', `parse error: ${err.message}`);
       return;
     }
 
@@ -108,6 +112,8 @@ function handleStoreConnection(ws, token) {
         const event = processDebit(db, comanda.id, amount, store.id);
         const newBalance = getBalance(db, comanda.id);
 
+        log.debitoConfirmado(comanda.code, comanda.holder_name, amount, newBalance, store.name);
+
         ws.send(JSON.stringify({
           type: 'debit_confirmed',
           event_id: event.id,
@@ -136,6 +142,7 @@ function handleStoreConnection(ws, token) {
       } catch (err) {
         if (err instanceof InsufficientBalanceError) {
           const currentBalance = getBalance(db, comanda.id);
+          log.debitoRejeitado(comanda.code, 'insufficient_balance', amount, currentBalance, store.name);
           ws.send(JSON.stringify({
             type: 'debit_rejected',
             reason: 'insufficient_balance',
@@ -143,8 +150,10 @@ function handleStoreConnection(ws, token) {
             requested: amount,
           }));
         } else if (err instanceof InvalidAmountError) {
+          log.debitoRejeitado(comanda.code, 'invalid_amount', amount, null, store.name);
           ws.send(JSON.stringify({ type: 'debit_rejected', reason: 'invalid_amount', requested: amount }));
         } else {
+          log.serverError('wsStore', err.message);
           ws.send(JSON.stringify({ type: 'debit_rejected', reason: 'server_error', requested: amount }));
         }
       }
@@ -174,10 +183,11 @@ function handleStoreConnection(ws, token) {
 
   ws.on('close', () => {
     storeConnections.delete(ws);
+    log.wsDisconnect('store', store.name, storeConnections.size);
   });
 
   ws.on('error', (err) => {
-    console.error('Store WS error:', err.message);
+    log.serverError('wsStore', err.message);
     storeConnections.delete(ws);
   });
 }

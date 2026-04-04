@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const config = require('./config');
+const log = require('./logger');
 
 // Segurança contra o ambiente virtual do PKG (/snapshot/...)
 // Se estiver rodando como executável, gravamos o BD na mesma pasta do .exe físico!
@@ -14,7 +15,7 @@ let _db = null;
 
 function getDb() {
   if (!_db) {
-    console.log(`[Banco de Dados] Conectando ao SQLite em: ${DB_PATH}`);
+    log.dbConnect(DB_PATH);
     
     const dbOptions = {};
     if (process.pkg) {

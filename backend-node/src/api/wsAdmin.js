@@ -1,5 +1,6 @@
 const { getDb } = require('../database');
 const config = require('../config');
+const log = require('../logger');
 const { getNextCode, createComanda, getComandaByCode, getBalance } = require('../services/comandaService');
 const { processCredit } = require('../services/transactionService');
 const { createOrUpdateCategory } = require('../services/productService');
@@ -12,6 +13,7 @@ const { adminConnections, broadcastToAdmins } = require('./wsRegistry');
 
 function handleAdminConnection(ws, token) {
   if (token !== config.adminToken) {
+    log.wsAuthFail('admin');
     ws.close(1008, 'Unauthorized');
     return;
   }
@@ -22,6 +24,7 @@ function handleAdminConnection(ws, token) {
   }
 
   adminConnections.add(ws);
+  log.wsConnect('admin', 'admin', adminConnections.size);
 
   let rateCount = 0;
   let rateWindowStart = Date.now();
@@ -37,6 +40,7 @@ function handleAdminConnection(ws, token) {
       rateWindowStart = now;
     }
     if (++rateCount > WS_RATE_LIMIT_MAX) {
+      log.rateLimited('admin', null);
       ws.send(JSON.stringify({ type: 'error', reason: 'rate_limit_exceeded' }));
       return;
     }
@@ -45,7 +49,7 @@ function handleAdminConnection(ws, token) {
     try {
       data = JSON.parse(rawData.toString());
     } catch (err) {
-      console.error('Admin WS message parse error:', err.message);
+      log.serverError('wsAdmin', `parse error: ${err.message}`);
       return;
     }
 
@@ -79,6 +83,8 @@ function handleAdminConnection(ws, token) {
         }
 
         const nextCode = getNextCode(db);
+
+        log.comandaCriada(comanda.code, comanda.holder_name, initialBalance);
 
         broadcastToAdmins({
           type: 'comanda_created',
@@ -128,6 +134,8 @@ function handleAdminConnection(ws, token) {
 
         const newBalance = getBalance(db, comanda.id);
 
+        log.creditoConfirmado(comandaCode, comanda.holder_name, amount, newBalance);
+
         broadcastToAdmins({
           type: 'credit_confirmed',
           code: comandaCode,
@@ -169,10 +177,11 @@ function handleAdminConnection(ws, token) {
 
   ws.on('close', () => {
     adminConnections.delete(ws);
+    log.wsDisconnect('admin', 'admin', adminConnections.size);
   });
 
   ws.on('error', (err) => {
-    console.error('Admin WS error:', err.message);
+    log.serverError('wsAdmin', err.message);
     adminConnections.delete(ws);
   });
 }

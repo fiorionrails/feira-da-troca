@@ -17,6 +17,7 @@ const cors = require('cors');
 const { rateLimit } = require('express-rate-limit');
 
 const config = require('./config');
+const log = require('./logger');
 const restRouter = require('./api/rest');
 const { handleAdminConnection } = require('./api/wsAdmin');
 const { handleStoreConnection } = require('./api/wsStore');
@@ -27,6 +28,13 @@ const app = express();
 // Allow all origins — local-first design (private LAN, no external exposure)
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['*'] }));
 app.use(express.json({ limit: '10kb' }));
+
+// REST request logger
+app.use((req, res, next) => {
+  const t0 = Date.now();
+  res.on('finish', () => log.rest(req.method, req.path, res.statusCode, Date.now() - t0));
+  next();
+});
 
 // Basic rate limiting — prevents abuse; generous limits for a local fair event
 const apiLimiter = rateLimit({
@@ -71,10 +79,7 @@ server.on('upgrade', (request, socket, head) => {
 
 // Only start listening when executed directly (not when imported by tests)
 if (require.main === module) {
-  server.listen(config.port, '0.0.0.0', () => {
-    console.log(`Ouroboros backend (Node.js) running at http://0.0.0.0:${config.port}`);
-    console.log(`Event: ${config.eventName}`);
-  });
+  server.listen(config.port, '0.0.0.0', () => log.banner(config));
 }
 
 module.exports = { app, server };

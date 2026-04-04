@@ -1,4 +1,5 @@
 const config = require('../config');
+const log = require('../logger');
 
 // Registro compartilhado para conexões de Packing (Semelhante ao wsRegistry.js)
 if (!global.packingConnections) {
@@ -9,8 +10,8 @@ const connections = global.packingConnections;
 
 function broadcastToPacking(message) {
   const data = JSON.stringify(message);
-  console.log(`[WS Packing] Broadcasting type: ${message.type} to ${connections.size} connection(s).`);
-  
+  log.broadcast(message.type, connections.size);
+
   for (const ws of connections) {
     try {
       if (ws.readyState === 1) { // 1 = OPEN
@@ -23,15 +24,14 @@ function broadcastToPacking(message) {
 }
 
 function handlePackingConnection(ws, token) {
-  // Autenticação exigida conforme nova decisão do usuário
   if (token !== config.adminToken) {
-    console.log('[WS Packing] Conexão negada: Token inválido.');
+    log.wsAuthFail('packing');
     ws.close(4001, 'Unauthorized');
     return;
   }
 
   connections.add(ws);
-  console.log(`[WS Packing] Nova conexão aceita. Total: ${connections.size}`);
+  log.wsConnect('packing', 'packing', connections.size);
 
   ws.send(JSON.stringify({ 
     type: 'connected', 
@@ -41,7 +41,7 @@ function handlePackingConnection(ws, token) {
 
   ws.on('close', () => {
     connections.delete(ws);
-    console.log(`[WS Packing] Conexão encerrada. Total: ${connections.size}`);
+    log.wsDisconnect('packing', 'packing', connections.size);
   });
 
   ws.on('error', () => {
