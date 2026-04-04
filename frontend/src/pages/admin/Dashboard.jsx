@@ -7,7 +7,7 @@ import Layout from '../../components/Layout'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { isConnected, nextCode, recentComandas, economyStream, wsError, createComanda, addCredit } = useAdminWebSocket()
+  const { isConnected, nextCode, recentComandas, economyStream, wsError, createComanda, addCredit, lastCategoryUpdate } = useAdminWebSocket()
   
   const [holderName, setHolderName] = useState('')
   const [mode, setMode] = useState('new') // 'new' | 'existing'
@@ -89,7 +89,7 @@ export default function Dashboard() {
     const fetchCategories = async () => {
       try {
         const token = sessionStorage.getItem('ouroboros_token')
-        const res = await fetch(`${BACKEND_HTTP}/api/categories`, {
+        const res = await fetch(`${BACKEND_HTTP}/api/categories?t=${Date.now()}`, {
           headers: { 'token': token }
         })
         if (res.ok) {
@@ -102,7 +102,7 @@ export default function Dashboard() {
       }
     }
     fetchCategories()
-  }, [])
+  }, [lastCategoryUpdate])
 
   const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
   
@@ -432,12 +432,14 @@ export default function Dashboard() {
                     [...economyStream, ...recentComandas]
                     .sort((a, b) => (b._ts || 0) - (a._ts || 0))
                     .map((evt, idx) => (
-                        <div key={idx} style={{ padding: '16px', background: 'var(--element-bg)', borderLeft: `3px solid ${evt.type === 'comanda_created' ? 'var(--accent-primary)' : evt.type === 'credit_added' ? 'var(--success)' : 'var(--danger)'}`, borderRadius: '4px' }}>
+                        <div key={idx} style={{ padding: '16px', background: 'var(--element-bg)', borderLeft: `3px solid ${evt.type === 'comanda_created' ? 'var(--accent-primary)' : evt.type === 'credit_added' ? 'var(--success)' : evt.type === 'category_updated' ? 'var(--accent-primary)' : 'var(--danger)'}`, borderRadius: '4px' }}>
                             {evt.type === 'comanda_created' 
                                 ? <><strong style={{ color: 'var(--accent-primary)' }}>+{evt.code}:</strong> Criada para <b>{evt.holder_name}</b> com inicial de {evt.balance} ETC</>
                                 : evt.type === 'credit_added'
                                     ? <><strong style={{ color: 'var(--success)' }}>💰 {evt.code}:</strong> +{evt.amount} ETC adicionado para <b>{evt.holder_name}</b> (novo saldo: {evt.new_balance} ETC)</>
-                                    : <><strong style={{ color: 'var(--danger)' }}>🔥 {evt.comanda_code}:</strong> -{evt.amount} ETC gasto na loja {evt.store_name} (novo saldo: {evt.new_balance} ETC)</>
+                                    : evt.type === 'category_updated'
+                                        ? <><strong style={{ color: 'var(--accent-primary)' }}>📦 NOVA CATEGORIA:</strong> A categoria "<b>{evt.name}</b>" foi sincronizada em todos os caixas.</>
+                                        : <><strong style={{ color: 'var(--danger)' }}>🔥 {evt.comanda_code}:</strong> -{evt.amount} ETC gasto na loja {evt.store_name} (novo saldo: {evt.new_balance} ETC)</>
                             }
                         </div>
                     ))

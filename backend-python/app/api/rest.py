@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
 from pydantic import BaseModel
 import uuid
 import secrets
@@ -72,7 +72,7 @@ class CategoryCreate(BaseModel):
     price: int
 
 @router.post("/categories")
-def create_category(category: CategoryCreate, token: str = Depends(verify_admin)):
+def create_category(category: CategoryCreate, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (category.name,))
@@ -85,7 +85,13 @@ def create_category(category: CategoryCreate, token: str = Depends(verify_admin)
             (new_id, category.name, category.price)
         )
         conn.commit()
-        return {"id": new_id, "name": category.name, "price": category.price}
+        
+        new_cat = {"id": new_id, "name": category.name, "price": category.price, "total_entries": 0, "total_exits": 0}
+        
+        from app.api.ws_admin import manager
+        background_tasks.add_task(manager.broadcast, {"type": "category_updated", "category": new_cat})
+        
+        return new_cat
 
 class StoreCreate(BaseModel):
     name: str
@@ -207,3 +213,208 @@ def get_analytics():
             "top_stores": top_stores,
             "category_distribution": category_distribution
         }
+
+# --- Distribuição Admin ---
+
+class DistributionCreate(BaseModel):
+    name: str
+    num_boxes: int
+
+@router.get("/distribution")
+def list_distributions(token: str = Depends(verify_admin)):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM distributions ORDER BY created_at DESC")
+        return [dict(r) for r in cursor.fetchall()]
+
+@router.post("/distribution")
+def create_distribution(dist: DistributionCreate, token: str = Depends(verify_admin)):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        new_id = str(uuid.uuid4())
+        cursor.execute(
+            "INSERT INTO distributions (id, name, num_boxes, status, created_at) VALUES (?, ?, ?, ?, ?)",
+            (new_id, dist.name, dist.num_boxes, 'planning', datetime.now().isoformat())
+        )
+        conn.commit()
+        return {"id": new_id, "name": dist.name, "num_boxes": dist.num_boxes, "status": "planning"}
+
+@router.get("/distribution/suggest")
+def get_distribution_suggestion(token: str = Depends(verify_admin)):
+    from app.services.distribution_service import suggest_box_count
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT total_entries FROM categories WHERE total_entries > 0")
+        categories = [dict(r) for r in cursor.fetchall()]
+        cursor.execute("SELECT COUNT(*) as c FROM stores")
+        stores_count = cursor.fetchone()["c"]
+        return suggest_box_count(categories, stores_count)
+
+@router.get("/distribution/{dist_id}")
+def get_distribution_detail(dist_id: str, token: str = Depends(verify_admin)):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM distributions WHERE id = ?", (dist_id,))
+        dist = cursor.fetchone()
+        if not dist:
+            raise HTTPException(status_code=404, detail="Distribution not found")
+        
+        cursor.execute("""
+            SELECT b.*, s.name as store_name
+            FROM boxes b
+            JOIN stores s ON b.assigned_store_id = s.id
+            WHERE b.distribution_id = ?
+            ORDER BY b.box_number ASC
+        """, (dist_id,))
+        boxes = [dict(r) for r in cursor.fetchall()]
+
+        for box in boxes:
+            cursor.execute("""
+                SELECT bi.target_quantity, c.name as category_name
+                FROM box_items bi
+                JOIN categories c ON bi.category_id = c.id
+                WHERE bi.box_id = ?
+            """, (box["id"],))
+            box["items"] = [dict(r) for r in cursor.fetchall()]
+
+        return {"distribution": dict(dist), "boxes": boxes}
+
+@router.post("/distribution/{dist_id}/calculate")
+def calculate_distribution_endpoint(dist_id: str, token: str = Depends(verify_admin)):
+    from app.services.distribution_service import distribute_items
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM distributions WHERE id = ?", (dist_id,))
+        dist = cursor.fetchone()
+        if not dist:
+            raise HTTPException(status_code=404, detail="Distribution not found")
+        
+        cursor.execute("SELECT id, name, total_entries FROM categories WHERE total_entries > 0")
+        categories = [dict(r) for r in cursor.fetchall()]
+        cursor.execute("SELECT id, name FROM stores ORDER BY name ASC")
+        stores = [dict(r) for r in cursor.fetchall()]
+        
+        if not stores:
+            raise HTTPException(status_code=400, detail="Nenhuma loja cadastrada.")
+
+        try:
+            result = distribute_items(categories, dist["num_boxes"], stores)
+            
+            # Limpar anterior
+            cursor.execute("SELECT id FROM boxes WHERE distribution_id = ?", (dist_id,))
+            old_boxes = cursor.fetchall()
+            if old_boxes:
+                old_ids = [b["id"] for b in old_boxes]
+                placeholders = ",".join("?" * len(old_ids))
+                cursor.execute(f"DELETE FROM box_items WHERE box_id IN ({placeholders})", tuple(old_ids))
+                cursor.execute("DELETE FROM boxes WHERE distribution_id = ?", (dist_id,))
+
+            for b in result["boxes"]:
+                new_box_id = str(uuid.uuid4())
+                cursor.execute(
+                    "INSERT INTO boxes (id, distribution_id, box_number, assigned_store_id, status) VALUES (?, ?, ?, ?, ?)",
+                    (new_box_id, dist_id, b["box_number"], b["assigned_store_id"], "pending")
+                )
+                for cat_id, qty in b["items"].items():
+                    cursor.execute(
+                        "INSERT INTO box_items (id, box_id, category_id, target_quantity) VALUES (?, ?, ?, ?)",
+                        (str(uuid.uuid4()), new_box_id, cat_id, qty)
+                    )
+            
+            conn.commit()
+            return {"message": "Distribuição calculada", "warnings": result["warnings"]}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+@router.put("/distribution/{dist_id}/activate")
+def activate_distribution(dist_id: str, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE distributions SET status = 'active' WHERE id = ?", (dist_id,))
+        conn.commit()
+    
+    from app.api.ws_packing import manager as packing_manager
+    background_tasks.add_task(packing_manager.broadcast, {"type": "distribution_status_changed", "status": "active"})
+    return {"status": "active"}
+
+# --- Packing API ---
+
+@router.get("/packing/active")
+def get_active_packing(token: str = Depends(verify_admin)):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM distributions WHERE status = 'active'")
+        dist = cursor.fetchone()
+        if not dist:
+            raise HTTPException(status_code=404, detail="Nenhuma distribuição ativa.")
+
+        cursor.execute("""
+            SELECT b.*, s.name as store_name
+            FROM boxes b
+            JOIN stores s ON b.assigned_store_id = s.id
+            WHERE b.distribution_id = ?
+            ORDER BY b.box_number ASC
+        """, (dist["id"],))
+        boxes = [dict(r) for r in cursor.fetchall()]
+
+        for box in boxes:
+            cursor.execute("""
+                SELECT bi.target_quantity, c.name as category_name
+                FROM box_items bi
+                JOIN categories c ON bi.category_id = c.id
+                WHERE bi.box_id = ?
+            """, (box["id"],))
+            box["items"] = [dict(r) for r in cursor.fetchall()]
+
+        stats = {
+            "total_boxes": len(boxes),
+            "pending": len([b for b in boxes if b["status"] == "pending"]),
+            "in_progress": len([b for b in boxes if b["status"] == "in_progress"]),
+            "done": len([b for b in boxes if b["status"] == "done"])
+        }
+
+        return {"distribution": dict(dist), "boxes": boxes, "stats": stats}
+
+class ClaimRequest(BaseModel):
+    responsible_name: str
+
+@router.post("/packing/boxes/{box_id}/claim")
+def claim_box_endpoint(box_id: str, req: ClaimRequest, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
+    from app.services.box_service import claim_box
+    try:
+        claim_box(box_id, req.responsible_name)
+        from app.api.ws_packing import manager as packing_manager
+        background_tasks.add_task(packing_manager.broadcast, {
+            "type": "box_claimed", 
+            "box_id": box_id, 
+            "responsible_name": req.responsible_name
+        })
+        return {"message": "Caixa assumida"}
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+@router.post("/packing/boxes/{box_id}/complete")
+def complete_box_endpoint(box_id: str, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
+    from app.services.box_service import complete_box
+    try:
+        recalc_triggered = complete_box(box_id)
+        from app.api.ws_packing import manager as packing_manager
+        background_tasks.add_task(packing_manager.broadcast, {"type": "box_completed", "box_id": box_id})
+        if recalc_triggered:
+            background_tasks.add_task(packing_manager.broadcast, {"type": "distribution_recalculated"})
+        return {"message": "Caixa concluída", "recalc_triggered": recalc_triggered}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/packing/boxes/{box_id}/cancel")
+def cancel_box_endpoint(box_id: str, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
+    from app.services.box_service import cancel_box
+    try:
+        recalc_triggered = cancel_box(box_id)
+        from app.api.ws_packing import manager as packing_manager
+        background_tasks.add_task(packing_manager.broadcast, {"type": "box_released", "box_id": box_id})
+        if recalc_triggered:
+            background_tasks.add_task(packing_manager.broadcast, {"type": "distribution_recalculated"})
+        return {"message": "Caixa liberada", "recalc_triggered": recalc_triggered}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wifi, WifiOff, LogOut, BarChart3, Clock, Sun, Moon, Store } from 'lucide-react'
+import { Wifi, WifiOff, LogOut, BarChart3, Clock, Sun, Moon, Store, Package, ClipboardList } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
 export default function Header({
@@ -100,6 +100,20 @@ export default function Header({
           {role === 'admin' && (
             <button onClick={() => window.open('/analytics', '_blank')} style={styles.chip} title="Abrir Analytics">
               <BarChart3 size={16} />
+            </button>
+          )}
+
+          {/* Distribuição de Caixas (admin) */}
+          {role === 'admin' && (
+            <button onClick={() => navigate('/admin/distribution')} style={styles.chip} title="Gerenciar Distribuição">
+              <Package size={16} />
+            </button>
+          )}
+
+          {/* Packing / Montagem (admin/voluntário logado) */}
+          {role === 'admin' && (
+            <button onClick={() => navigate('/packing')} style={styles.chip} title="Montagem de Caixas (Packing)">
+              <ClipboardList size={16} />
             </button>
           )}
 

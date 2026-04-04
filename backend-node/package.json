@@ -2,7 +2,8 @@
   "name": "ouroboros-backend",
   "version": "1.0.0",
   "description": "Backend do Ouroboros – Feira da Troca (Node.js)",
-  "main": "src/app.js",
+  "bin": "src/bootstrap.js",
+  "main": "src/bootstrap.js",
   "scripts": {
     "start": "node src/app.js",
     "dev": "node --watch src/app.js",
@@ -17,5 +18,8 @@
     "express-rate-limit": "^7.5.0",
     "uuid": "11.1.0",
     "ws": "8.18.2"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   }
 }

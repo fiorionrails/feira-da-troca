@@ -1,4 +1,15 @@
-require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
+
+// Se estiver rodando como executável (PKG), busca o .env ao lado do .exe físico!
+const envDir = process.pkg ? path.dirname(process.execPath) : process.cwd();
+const envPath = path.join(envDir, '.env');
+
+if (fs.existsSync(envPath)) {
+  require('dotenv').config({ path: envPath });
+} else {
+  require('dotenv').config(); // Fallback padrão
+}
 const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');
@@ -9,6 +20,7 @@ const config = require('./config');
 const restRouter = require('./api/rest');
 const { handleAdminConnection } = require('./api/wsAdmin');
 const { handleStoreConnection } = require('./api/wsStore');
+const { handlePackingConnection } = require('./api/wsPacking');
 
 const app = express();
 
@@ -47,6 +59,10 @@ server.on('upgrade', (request, socket, head) => {
   } else if (pathname === '/ws/store') {
     wss.handleUpgrade(request, socket, head, (ws) => {
       handleStoreConnection(ws, token);
+    });
+  } else if (pathname === '/ws/packing') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      handlePackingConnection(ws, token);
     });
   } else {
     socket.destroy();

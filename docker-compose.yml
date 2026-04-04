@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # O frontend sobe indepedente de qual backend for escolhido
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80" # Mapeia a porta tradicional 5173 para a 80 do NGINX
+    restart: "unless-stopped"
+    
+  # Mapeado para o Perfil "python"
+  backend-python:
+    build:
+      context: ./backend-python
+    ports:
+      - "8000:8000"
+    volumes:
+      - python_db_data:/app # O volume gerenciará todo o diretório local isoladamente
+    profiles:
+      - python
+    restart: "unless-stopped"
+
+  # Mapeado para o Perfil "node"
+  backend-node:
+    build:
+      context: ./backend-node
+    ports:
+      - "8000:8000"
+    volumes:
+      - node_db_data:/app # O volume gerenciará todo o diretório local isoladamente
+    profiles:
+      - node
+    restart: "unless-stopped"
+
+volumes:
+  # Volumes isolados para garantir a persistência dos arquivos .db para cada um
+  python_db_data:
+  node_db_data:

@@ -8,18 +8,7 @@ const { parsePositiveInt, parseNonNegativeInt } = require('../utils');
 const MAX_ADMIN_CONNECTIONS = 10;
 const WS_RATE_LIMIT_MAX = 120; // messages per minute per connection
 
-const adminConnections = new Set();
-
-function broadcastToAdmins(message) {
-  const data = JSON.stringify(message);
-  for (const ws of adminConnections) {
-    try {
-      if (ws.readyState === ws.OPEN) ws.send(data);
-    } catch {
-      adminConnections.delete(ws);
-    }
-  }
-}
+const { adminConnections, broadcastToAdmins } = require('./wsRegistry');
 
 function handleAdminConnection(ws, token) {
   if (token !== config.adminToken) {

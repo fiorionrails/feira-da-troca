@@ -5,6 +5,8 @@ import Login from './pages/Login'
 import StoreTerminal from './pages/store/Terminal'
 import AdminDashboard from './pages/admin/Dashboard'
 import Analytics from './pages/admin/Analytics'
+import Distribution from './pages/admin/Distribution'
+import Packing from './pages/packing/Packing'
 
 function App() {
   return (
@@ -18,6 +20,10 @@ function App() {
 
           {/* Painel Administrativo / Banco */}
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/distribution" element={<Distribution />} />
+
+          {/* Montagem de Caixas (Voluntários) */}
+          <Route path="/packing" element={<Packing />} />
 
           {/* Dashboard Analítico (público — telão) */}
           <Route path="/analytics" element={<Analytics />} />
