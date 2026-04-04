@@ -1,5 +1,9 @@
 'use strict';
 
+// Load .env BEFORE any module is required, so config.js captures the correct
+// ADMIN_TOKEN instead of the fallback 'admin_token_change_me'.
+require('dotenv').config();
+
 /**
  * REST API integration tests.
  *
