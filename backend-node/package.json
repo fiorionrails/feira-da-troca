@@ -5,10 +5,10 @@
   "bin": "src/bootstrap.js",
   "main": "src/bootstrap.js",
   "scripts": {
-    "start": "node src/bootstrap.js",
-    "dev": "node --watch src/bootstrap.js",
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js",
     "db:init": "node manage.js",
-    "build:exe": "pkg . --targets node18-win-x64 --out-path bin"
+    "test": "node --test --test-reporter=spec tests/utils.test.js tests/services.test.js tests/rest.test.js tests/ws.test.js"
   },
   "dependencies": {
     "better-sqlite3": "11.9.1",
