@@ -19,4 +19,9 @@ function getDb() {
   return _db;
 }
 
-module.exports = { getDb };
+/** Replaces the DB singleton. Only for use in tests. */
+function _overrideDb(testDb) {
+  _db = testDb;
+}
+
+module.exports = { getDb, _overrideDb };

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "node --watch src/app.js",
-    "db:init": "node manage.js"
+    "db:init": "node manage.js",
+    "test": "node --test --test-reporter=spec tests/utils.test.js tests/services.test.js tests/rest.test.js tests/ws.test.js"
   },
   "dependencies": {
     "better-sqlite3": "11.9.1",

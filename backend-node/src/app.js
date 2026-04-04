@@ -53,9 +53,12 @@ server.on('upgrade', (request, socket, head) => {
   }
 });
 
-server.listen(config.port, '0.0.0.0', () => {
-  console.log(`Ouroboros backend (Node.js) running at http://0.0.0.0:${config.port}`);
-  console.log(`Event: ${config.eventName}`);
-});
+// Only start listening when executed directly (not when imported by tests)
+if (require.main === module) {
+  server.listen(config.port, '0.0.0.0', () => {
+    console.log(`Ouroboros backend (Node.js) running at http://0.0.0.0:${config.port}`);
+    console.log(`Event: ${config.eventName}`);
+  });
+}
 
 module.exports = { app, server };
