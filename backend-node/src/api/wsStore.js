@@ -7,7 +7,8 @@ const { broadcastToAdmins } = require('./wsAdmin');
 const { parsePositiveInt } = require('../utils');
 
 const MAX_STORE_CONNECTIONS = 100;
-const WS_RATE_LIMIT_MAX = 300; // messages per minute per connection
+// STRESS_NO_RATELIMIT=true bypasses WS rate limiting for load testing only
+const WS_RATE_LIMIT_MAX = process.env.STRESS_NO_RATELIMIT ? Infinity : 300;
 
 const storeConnections = new Set();
 

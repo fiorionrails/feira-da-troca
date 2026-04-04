@@ -26,6 +26,9 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin_token_change_me';
 
 const DURATION_SEC    = parseInt(process.argv[2] || '60', 10);
 const NUM_STORES      = parseInt(process.argv[3] || '5', 10);
+// Min sleep between store ops in ms. 0 = fire as fast as the server responds.
+// Use with STRESS_NO_RATELIMIT=true on the server to bypass WS rate limiting.
+const SLEEP_MS        = parseInt(process.argv[4] ?? '250', 10);
 const REPORT_INTERVAL = 3000; // ms
 
 // ---------------------------------------------------------------------------
@@ -281,9 +284,7 @@ async function storeWorker(token, name) {
           }
         }
 
-        // 250ms minimum keeps each connection under 4 ops/sec (240/min),
-        // well within the 300/min rate limit even with broadcast overhead.
-        await sleep(rand(250, 500));
+        if (SLEEP_MS > 0) await sleep(rand(SLEEP_MS, SLEEP_MS * 2));
       }
 
       ws.close();
@@ -348,8 +349,10 @@ async function reporterLoop(startTime) {
 // ---------------------------------------------------------------------------
 
 async function setup() {
+  const sleepLabel = SLEEP_MS > 0 ? `${SLEEP_MS}ms` : 'SEM SLEEP (máx throughput)';
+  const rateLimitLabel = process.env.STRESS_NO_RATELIMIT ? 'DESATIVADO' : '300/min';
   console.log('\nIniciando teste de estresse do backend-node...');
-  console.log(`Duração: ${DURATION_SEC}s | Lojas: ${NUM_STORES}\n`);
+  console.log(`Duração: ${DURATION_SEC}s | Lojas: ${NUM_STORES} | Sleep: ${sleepLabel} | Rate limit WS: ${rateLimitLabel}\n`);
 
   // Seed categories
   process.stdout.write('Semeando categorias... ');
