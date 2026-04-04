@@ -374,22 +374,31 @@ async function setup() {
     ? existing.map((s) => ({ token: s.terminal_token, name: s.name }))
     : [];
 
-  let failures = 0;
-  while (storeTokens.length < NUM_STORES) {
-    const name = `Loja ${storeTokens.length + 1}`;
-    const { status, body } = await httpRequest('POST', '/api/stores', { name });
-    if (status === 201 && body && body.terminal_token) {
-      storeTokens.push({ token: body.terminal_token, name });
-      failures = 0;
-    } else {
-      failures++;
-      console.error(`\n  [aviso] falha ao criar loja (HTTP ${status}): ${JSON.stringify(body)}`);
-      if (failures >= 3) {
-        console.error('  Abortando setup: 3 falhas consecutivas ao criar lojas.');
-        process.exit(1);
+  const needed = NUM_STORES - storeTokens.length;
+  if (needed > 0) {
+    process.stdout.write(`\n  criando ${needed} lojas`);
+    for (let i = 0; i < needed; i++) {
+      const name = `Loja ${storeTokens.length + 1}`;
+      let created = false;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { status, body } = await httpRequest('POST', '/api/stores', { name });
+        if (status === 201 && body && body.terminal_token) {
+          storeTokens.push({ token: body.terminal_token, name });
+          process.stdout.write('.');
+          created = true;
+          break;
+        }
+        // 429 ou outro erro: espera e tenta de novo
+        await sleep(status === 429 ? 3000 : 500);
       }
-      await sleep(500); // pausa antes de tentar de novo (ex: token collision)
+      if (!created) {
+        console.error(`\n  Não foi possível criar loja após 5 tentativas. Continuando com ${storeTokens.length} lojas.`);
+        break;
+      }
+      // ~15 criações/s para ficar sob o limite de 300/min do REST
+      await sleep(70);
     }
+    console.log(' ok');
   }
 
   console.log(`${storeTokens.length} lojas prontas`);
