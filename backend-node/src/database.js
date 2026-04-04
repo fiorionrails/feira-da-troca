@@ -19,7 +19,7 @@ function getDb() {
   return _db;
 }
 
-/** Replaces the DB singleton. Only for use in tests. */
+/** FOR TESTING ONLY. Replaces the DB singleton. Never call in production code. */
 function _overrideDb(testDb) {
   _db = testDb;
 }

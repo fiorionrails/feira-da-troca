@@ -57,6 +57,7 @@ const VIEW_SQL = `
 
 function createTestDb() {
   const db = new Database(':memory:');
+  // WAL mode is silently ignored on :memory: databases (no-op); production uses it on disk.
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
