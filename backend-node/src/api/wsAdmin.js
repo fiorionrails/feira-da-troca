@@ -6,7 +6,7 @@ const { createOrUpdateCategory } = require('../services/productService');
 const { parsePositiveInt, parseNonNegativeInt } = require('../utils');
 
 const MAX_ADMIN_CONNECTIONS = 10;
-const WS_RATE_LIMIT_MAX = 120; // messages per minute per connection
+const WS_RATE_LIMIT_MAX = 300; // messages per minute per connection
 
 const { adminConnections, broadcastToAdmins } = require('./wsRegistry');
 

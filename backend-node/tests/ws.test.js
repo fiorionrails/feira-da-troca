@@ -784,12 +784,12 @@ describe('Store WS — rate limiting', () => {
     seedStore(db, 'store-1', 'My Store', 'STRTK1');
   });
 
-  test('exceeding 60 messages per minute triggers rate_limit_exceeded', async () => {
+  test('exceeding 300 messages per minute triggers rate_limit_exceeded', async () => {
     const { ws } = await connectStore('STRTK1');
 
-    // Collect responses; send 65 messages (first 60 normal, then rate limited)
-    const received = collectMessages(ws, 65, 3000);
-    for (let i = 0; i < 65; i++) {
+    // Collect responses; send 305 messages (first 300 normal, then rate limited)
+    const received = collectMessages(ws, 305, 5000);
+    for (let i = 0; i < 305; i++) {
       ws.send(JSON.stringify({ type: 'balance_query', comanda_code: 'ZZZZ' }));
     }
     const msgs = await received;

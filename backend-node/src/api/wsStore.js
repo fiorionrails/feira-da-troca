@@ -6,7 +6,7 @@ const { broadcastToAdmins } = require('./wsAdmin');
 const { parsePositiveInt } = require('../utils');
 
 const MAX_STORE_CONNECTIONS = 100;
-const WS_RATE_LIMIT_MAX = 60; // messages per minute per connection
+const WS_RATE_LIMIT_MAX = 300; // messages per minute per connection
 
 const storeConnections = new Set();
 
