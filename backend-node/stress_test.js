@@ -40,16 +40,17 @@ let running = true;
 // ---------------------------------------------------------------------------
 
 const metrics = {
-  comandasCreated:  0,
-  debitsConfirmed:  0,
+  comandasCreated:    0,
+  debitsConfirmed:    0,
   debitsInsufficient: 0,
   debitsOtherReject:  0,
-  balanceQueries:   0,
-  errors:           0,
-  reconnects:       0,
-  latencies:        [],   // all-time, for final report
-  windowOps:        0,    // ops completed since last report
-  windowStart:      Date.now(),
+  balanceQueries:     0,
+  rateLimited:        0,
+  errors:             0,
+  reconnects:         0,
+  latencies:          [],   // all-time, for final report
+  windowOps:          0,    // ops completed since last report
+  windowStart:        Date.now(),
 };
 
 function recordLatency(ms) {
@@ -145,6 +146,9 @@ function connectWs(url) {
  * Wait for the next message whose `type` is in the `acceptTypes` set.
  * Silently discards broadcasts (balance_updated, admin_balance_updated,
  * update_next_code) that arrive while waiting for a direct reply.
+ *
+ * Always stops on `error` messages (e.g. rate_limit_exceeded) so the
+ * caller can handle them instead of waiting until timeout and reconnecting.
  */
 function waitForType(ws, acceptTypes, timeout = 5000) {
   return new Promise((resolve, reject) => {
@@ -157,12 +161,12 @@ function waitForType(ws, acceptTypes, timeout = 5000) {
       try { msg = JSON.parse(data.toString()); }
       catch (e) { clearTimeout(timer); ws.removeListener('message', handler); reject(e); return; }
 
-      if (acceptTypes.includes(msg.type)) {
+      if (acceptTypes.includes(msg.type) || msg.type === 'error') {
         clearTimeout(timer);
         ws.removeListener('message', handler);
         resolve(msg);
       }
-      // else: broadcast — keep waiting
+      // else: broadcast (balance_updated, update_next_code, etc.) — keep waiting
     };
     ws.on('message', handler);
   });
@@ -259,19 +263,27 @@ async function storeWorker(token, name) {
             metrics.debitsConfirmed++;
           } else if (reply.reason === 'insufficient_balance') {
             metrics.debitsInsufficient++;
+          } else if (reply.reason === 'rate_limit_exceeded') {
+            metrics.rateLimited++;
           } else {
             metrics.debitsOtherReject++;
           }
         } else {
           ws.send(JSON.stringify({ type: 'balance_query', comanda_code: code }));
-          await waitForType(ws, ['balance_response', 'error']);
+          const reply = await waitForType(ws, ['balance_response', 'error']);
           const latency = Date.now() - t0;
           recordLatency(latency);
           metrics.windowOps++;
-          metrics.balanceQueries++;
+          if (reply.reason === 'rate_limit_exceeded') {
+            metrics.rateLimited++;
+          } else {
+            metrics.balanceQueries++;
+          }
         }
 
-        await sleep(rand(100, 400));
+        // 250ms minimum keeps each connection under 4 ops/sec (240/min),
+        // well within the 300/min rate limit even with broadcast overhead.
+        await sleep(rand(250, 500));
       }
 
       ws.close();
@@ -312,6 +324,7 @@ function printReport(elapsed, final = false) {
   console.log(`  Saldo insuficiente: ${metrics.debitsInsufficient}`);
   console.log(`  Outros rejeites:    ${metrics.debitsOtherReject}`);
   console.log(`Consultas de saldo:   ${metrics.balanceQueries}`);
+  console.log(`Rate limited:         ${metrics.rateLimited}`);
   console.log(`Total de operações:   ${totalOps}`);
   console.log(`Erros / reconexões:   ${metrics.errors} / ${metrics.reconnects}`);
   console.log('─'.repeat(44));
