@@ -360,22 +360,35 @@ async function setup() {
 
   // Fetch or create stores
   process.stdout.write('Preparando lojas... ');
-  const { body: existing } = await httpRequest('GET', '/api/stores');
+  const { status: getStatus, body: existing } = await httpRequest('GET', '/api/stores');
+  if (getStatus !== 200) {
+    console.error(`\nFalha ao listar lojas (HTTP ${getStatus}): ${JSON.stringify(existing)}`);
+    console.error('Servidor rodando? ADMIN_TOKEN correto?');
+    process.exit(1);
+  }
+
   const storeTokens = Array.isArray(existing)
     ? existing.map((s) => ({ token: s.terminal_token, name: s.name }))
     : [];
 
-  const storeNames = ['Cantina Central', 'Bazar 3º Ano', 'Barraca de Jogos', 'Doces e Cia', 'Artesanato'];
+  let failures = 0;
   while (storeTokens.length < NUM_STORES) {
-    const name = storeNames[storeTokens.length] || `Loja ${storeTokens.length + 1}`;
-    const { body } = await httpRequest('POST', '/api/stores', { name });
-    if (body && body.terminal_token) {
+    const name = `Loja ${storeTokens.length + 1}`;
+    const { status, body } = await httpRequest('POST', '/api/stores', { name });
+    if (status === 201 && body && body.terminal_token) {
       storeTokens.push({ token: body.terminal_token, name });
+      failures = 0;
     } else {
-      console.error('\nFalha ao criar loja. Servidor rodando? ADMIN_TOKEN correto?');
-      process.exit(1);
+      failures++;
+      console.error(`\n  [aviso] falha ao criar loja (HTTP ${status}): ${JSON.stringify(body)}`);
+      if (failures >= 3) {
+        console.error('  Abortando setup: 3 falhas consecutivas ao criar lojas.');
+        process.exit(1);
+      }
+      await sleep(500); // pausa antes de tentar de novo (ex: token collision)
     }
   }
+
   console.log(`${storeTokens.length} lojas prontas`);
   return storeTokens.slice(0, NUM_STORES);
 }
