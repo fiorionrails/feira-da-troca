@@ -1,62 +1,75 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { BACKEND_WS } from '../config';
 
 export function usePackingWebSocket(onMessage) {
   const [status, setStatus] = useState('connecting');
   const ws = useRef(null);
   const reconnectTimeout = useRef(null);
+  const onMessageRef = useRef(onMessage);
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   const connect = useCallback(() => {
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
+    }
+
     const token = sessionStorage.getItem('ouroboros_token');
     if (!token) {
       setStatus('unauthorized');
       return;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname === 'localhost' ? 'localhost:5000' : window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/packing?token=${token}`;
+    const wsUrl = `${BACKEND_WS}/ws/packing?token=${token}`;
+    const socket = new WebSocket(wsUrl);
+    ws.current = socket;
 
-    console.log(`[WS Packing] Conectando a ${wsUrl}...`);
-    ws.current = new WebSocket(wsUrl);
-
-    ws.current.onopen = () => {
-      console.log('[WS Packing] Conectado.');
+    socket.onopen = () => {
+      if (ws.current !== socket) return;
       setStatus('connected');
     };
 
-    ws.current.onmessage = (event) => {
+    socket.onmessage = (event) => {
+      if (ws.current !== socket) return;
       try {
         const data = JSON.parse(event.data);
-        if (onMessage) onMessage(data);
+        if (onMessageRef.current) onMessageRef.current(data);
       } catch (err) {
         console.error('[WS Packing] Erro ao parsear mensagem:', err);
       }
     };
 
-    ws.current.onclose = (e) => {
-      console.log(`[WS Packing] Desconectado: ${e.code} ${e.reason}`);
+    socket.onclose = (e) => {
+      if (ws.current !== socket) return;
       setStatus('disconnected');
-      
+
       if (e.code === 4001 || e.code === 1008) {
         setStatus('unauthorized');
         return;
       }
 
-      // Reconnect after 3 seconds
       reconnectTimeout.current = setTimeout(connect, 3000);
     };
 
-    ws.current.onerror = (err) => {
-      console.error('[WS Packing] Erro:', err);
-      ws.current.close();
+    socket.onerror = () => {
+      if (ws.current !== socket) return;
+      socket.close();
     };
-  }, [onMessage]);
+  }, []);
 
   useEffect(() => {
     connect();
     return () => {
-      if (ws.current) ws.current.close();
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+      const socket = ws.current;
+      ws.current = null;
+      if (socket) socket.close();
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
+      }
     };
   }, [connect]);
 

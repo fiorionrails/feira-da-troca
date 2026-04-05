@@ -4,7 +4,17 @@ const log = require('../logger');
 const { getNextCode, createComanda, getComandaByCode, getBalance } = require('../services/comandaService');
 const { processCredit } = require('../services/transactionService');
 const { createOrUpdateCategory } = require('../services/productService');
+const { flagNeedsRecalc } = require('../services/boxService');
 const { parsePositiveInt, parseNonNegativeInt } = require('../utils');
+
+/**
+ * Se há uma distribuição ativa, marca que o inventário mudou e ela precisa de recálculo.
+ * O recálculo real só ocorre quando não houver caixas em progresso (boxService.checkAndTriggerRecalc).
+ */
+function maybeFlagRecalc(db) {
+  const activeDist = db.prepare("SELECT id FROM distributions WHERE status = 'active'").get();
+  if (activeDist) flagNeedsRecalc(activeDist.id);
+}
 
 const MAX_ADMIN_CONNECTIONS = 10;
 // STRESS_NO_RATELIMIT=true bypasses WS rate limiting for load testing only
@@ -75,13 +85,16 @@ function handleAdminConnection(ws, token) {
       try {
         const { comanda } = createComanda(db, holderName, initialBalance);
 
+        let addedItems = false;
         for (const item of cartItems) {
           const itemName = typeof item.name === 'string' ? item.name.trim() : '';
           const itemQty = parsePositiveInt(item.quantity);
           if (itemName && itemQty) {
             createOrUpdateCategory(db, itemName, 0, itemQty);
+            addedItems = true;
           }
         }
+        if (addedItems) maybeFlagRecalc(db);
 
         const nextCode = getNextCode(db);
 
@@ -125,13 +138,16 @@ function handleAdminConnection(ws, token) {
       try {
         processCredit(db, comanda.id, amount, null, 'Crédito adicional');
 
+        let addedItems = false;
         for (const item of cartItems) {
           const itemName = typeof item.name === 'string' ? item.name.trim() : '';
           const itemQty = parsePositiveInt(item.quantity);
           if (itemName && itemQty) {
             createOrUpdateCategory(db, itemName, 0, itemQty);
+            addedItems = true;
           }
         }
+        if (addedItems) maybeFlagRecalc(db);
 
         const newBalance = getBalance(db, comanda.id);
 
@@ -169,6 +185,7 @@ function handleAdminConnection(ws, token) {
 
       try {
         const cat = createOrUpdateCategory(db, name, price, totalEntriesInc);
+        if (totalEntriesInc > 0) maybeFlagRecalc(db);
         broadcastToAdmins({ type: 'category_updated', category: cat });
       } catch (err) {
         ws.send(JSON.stringify({ type: 'error', reason: err.message }));

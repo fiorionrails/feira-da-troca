@@ -268,9 +268,44 @@ router.post('/distribution/:id/calculate', adminAuth, (req, res) => {
   }
 });
 
+router.delete('/distribution/:id', adminAuth, (req, res) => {
+  const db = getDb();
+  const dist = db.prepare('SELECT * FROM distributions WHERE id = ?').get(req.params.id);
+  if (!dist) return res.status(404).json({ detail: 'Distribution not found' });
+
+  if (dist.status === 'active') {
+    const inProgress = db.prepare(
+      "SELECT COUNT(*) as c FROM boxes WHERE distribution_id = ? AND status = 'in_progress'"
+    ).get(req.params.id).c;
+    if (inProgress > 0) {
+      return res.status(409).json({ detail: `Não é possível excluir: ${inProgress} caixa(s) estão sendo montadas agora.` });
+    }
+  }
+
+  db.transaction(() => {
+    const boxes = db.prepare('SELECT id FROM boxes WHERE distribution_id = ?').all(req.params.id);
+    if (boxes.length > 0) {
+      const ids = boxes.map(b => b.id);
+      db.prepare(`DELETE FROM box_items WHERE box_id IN (${ids.map(() => '?').join(',')})`).run(...ids);
+      db.prepare('DELETE FROM boxes WHERE distribution_id = ?').run(req.params.id);
+    }
+    db.prepare('DELETE FROM distributions WHERE id = ?').run(req.params.id);
+  })();
+
+  res.json({ message: 'Rodada excluída.' });
+});
+
 router.put('/distribution/:id/activate', adminAuth, (req, res) => {
   const db = getDb();
-  db.prepare("UPDATE distributions SET status = 'active' WHERE id = ?").run(req.params.id);
+  const dist = db.prepare('SELECT id FROM distributions WHERE id = ?').get(req.params.id);
+  if (!dist) return res.status(404).json({ detail: 'Distribution not found' });
+
+  db.transaction(() => {
+    // Arquiva qualquer distribuição ativa anterior
+    db.prepare("UPDATE distributions SET status = 'complete' WHERE status = 'active' AND id != ?").run(req.params.id);
+    db.prepare("UPDATE distributions SET status = 'active' WHERE id = ?").run(req.params.id);
+  })();
+
   broadcastToPacking({ type: 'distribution_status_changed', status: 'active' });
   res.json({ status: 'active' });
 });
@@ -279,7 +314,7 @@ router.put('/distribution/:id/activate', adminAuth, (req, res) => {
 
 router.get('/packing/active', adminAuth, (req, res) => {
   const db = getDb();
-  const dist = db.prepare("SELECT * FROM distributions WHERE status = 'active'").get();
+  const dist = db.prepare("SELECT * FROM distributions WHERE status = 'active' ORDER BY created_at DESC").get();
   if (!dist) return res.status(404).json({ detail: 'Nenhuma distribuição ativa no momento.' });
 
   const boxes = db.prepare(`

@@ -8,6 +8,7 @@ import {
 import { Activity, Users, Coins, TrendingUp, Store, ShoppingCart, Zap } from 'lucide-react'
 import { BACKEND_HTTP, BACKEND_WS } from '../../config'
 import Layout from '../../components/Layout'
+import { useTheme } from '../../context/ThemeContext'
 
 const COLORS = ['#349754', '#42b368', '#56c67c', '#6bd890', '#7feba4', '#2a7a43', '#226535', '#1a5027']
 
@@ -36,10 +37,16 @@ function AnimatedNumber({ value, suffix = '' }) {
   return <>{display.toLocaleString('pt-BR')}{suffix}</>
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, dark }) => {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background: '#0a0a0a', border: '1px solid var(--border-lime)', borderRadius: '8px', padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
+    <div style={{
+      background: dark ? '#0a0a0a' : '#ffffff',
+      border: '1px solid var(--border-lime)',
+      borderRadius: '8px',
+      padding: '12px 16px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+    }}>
       <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '8px' }}>{label}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color, fontSize: '0.9rem', fontWeight: 600 }}>
@@ -52,6 +59,17 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Analytics() {
   const navigate = useNavigate()
+  const { theme } = useTheme()
+  const dark = theme === 'dark'
+
+  // Cores adaptativas para os charts do Recharts (não suportam CSS vars diretamente)
+  const chartColors = {
+    text:       dark ? '#94a3b8' : '#475569',
+    textStrong: dark ? '#f1f5f9' : '#1e293b',
+    grid:       dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+    axis:       dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.15)',
+  }
+
   const [data, setData] = useState(null)
   const [liveFeed, setLiveFeed] = useState([])
   const [flash, setFlash] = useState(null)
@@ -186,10 +204,10 @@ export default function Analytics() {
                         <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="minute" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                    <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} allowDecimals={false} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                    <XAxis dataKey="minute" tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={{ stroke: chartColors.axis }} />
+                    <YAxis tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={{ stroke: chartColors.axis }} allowDecimals={false} />
+                    <Tooltip content={<CustomTooltip dark={dark} />} />
                     <Area type="monotone" dataKey="credits" name="Créditos" stroke="#10b981" fill="url(#gradCredits)" strokeWidth={2} dot={false} />
                     <Area type="monotone" dataKey="debits" name="Débitos" stroke="#ef4444" fill="url(#gradDebits)" strokeWidth={2} dot={false} />
                   </AreaChart>
@@ -259,10 +277,10 @@ export default function Analytics() {
               {top_stores.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={top_stores} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickFormatter={v => `${v}`} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: '#f8fafc', fontSize: 12 }} axisLine={false} width={120} />
-                    <Tooltip content={<CustomTooltip />} formatter={(v) => [`${v} ETC`, 'Fatur.']} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} horizontal={false} />
+                    <XAxis type="number" tick={{ fill: chartColors.text, fontSize: 11 }} axisLine={{ stroke: chartColors.axis }} tickFormatter={v => `${v}`} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: chartColors.textStrong, fontSize: 12, fontWeight: 600 }} axisLine={false} width={120} />
+                    <Tooltip content={<CustomTooltip dark={dark} />} formatter={(v) => [`${v} ETC`, 'Fatur.']} />
                     <Bar dataKey="total" name="Faturamento" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} />
                   </BarChart>
                 </ResponsiveContainer>

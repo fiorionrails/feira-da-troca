@@ -1,11 +1,12 @@
-import { ConfigProvider, theme as antdTheme, Table, Modal, Space, Typography, Progress, Alert, App } from 'antd';
-import { 
-  BarChart3, 
-  Package, 
-  Play, 
-  RefreshCw, 
-  Plus, 
-  CheckCircle2, 
+import { useState, useEffect } from 'react';
+import { ConfigProvider, theme as antdTheme, Table, Modal, Space, Typography, Progress, Alert, App, Popconfirm } from 'antd';
+import {
+  BarChart3,
+  Package,
+  Play,
+  RefreshCw,
+  Plus,
+  Trash2,
   AlertTriangle,
   ArrowRight
 } from 'lucide-react';
@@ -126,6 +127,24 @@ const Distribution = () => {
     }
   };
 
+  const handleDelete = async (id) => {
+    try {
+      const res = await fetch(`${BACKEND_HTTP}/api/distribution/${id}`, {
+        method: 'DELETE',
+        headers: { 'token': adminToken }
+      });
+      if (res.ok) {
+        if (selectedDist?.id === id) setSelectedDist(null);
+        fetchDistributions();
+      } else {
+        const err = await res.json();
+        Modal.error({ title: 'Não foi possível excluir', content: err.detail, className: 'premium-modal' });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleActivate = async (id) => {
     try {
       const res = await fetch(`${BACKEND_HTTP}/api/distribution/${id}/activate`, {
@@ -195,14 +214,30 @@ const Distribution = () => {
           )}
           
           {record.status === 'planning' && (
-            <button 
-              className="btn" 
+            <button
+              className="btn"
               style={{ padding: '6px 12px', fontSize: '0.85rem', background: 'var(--success)' }}
               onClick={() => handleActivate(record.id)}
             >
               <Play size={14} /> Ativar
             </button>
           )}
+
+          <Popconfirm
+            title="Excluir rodada"
+            description="Esta ação é permanente. Deseja continuar?"
+            onConfirm={() => handleDelete(record.id)}
+            okText="Excluir"
+            cancelText="Cancelar"
+            okButtonProps={{ danger: true }}
+          >
+            <button
+              className="btn btn-outline"
+              style={{ padding: '6px 12px', fontSize: '0.85rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </Popconfirm>
         </Space>
       )
     }

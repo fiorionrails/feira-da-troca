@@ -1,16 +1,28 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Wifi, WifiOff, LogOut, BarChart3, Clock, Sun, Moon, Store, Package, ClipboardList } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { Wifi, WifiOff, LogOut, BarChart3, Clock, Sun, Moon, Store, Package, ClipboardList, TerminalSquare } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
+const ADMIN_NAV = [
+  { path: '/admin',               icon: TerminalSquare, label: 'Banco'        },
+  { path: '/admin/distribution',  icon: Package,        label: 'Distribuição' },
+  { path: '/packing',             icon: ClipboardList,  label: 'Packing'      },
+  { path: '/analytics',           icon: BarChart3,      label: 'Analytics'    },
+]
+
+const STORE_NAV = [
+  { path: '/store', icon: Store, label: 'Terminal' },
+]
+
 export default function Header({
-  role, // 'admin' | 'store' | 'analytics'
+  role,
   isConnected = true,
-  storeInfo = null, // { name: 'Loja X' }
+  storeInfo = null,
   onLogout,
   onManageStores = null,
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { theme, toggleTheme } = useTheme()
   const [currentTime, setCurrentTime] = useState(new Date())
 
@@ -25,50 +37,48 @@ export default function Header({
     navigate('/')
   }
 
-  const getRoleName = () => {
-    if (role === 'admin') return 'Banco Central'
-    if (role === 'store') return storeInfo?.name || 'Terminal Loja'
-    if (role === 'analytics') return 'Analytics'
-    return 'Ouroboros'
-  }
-
-  const getRoleColor = () => {
-    if (role === 'admin') return 'var(--lime-primary)'
-    if (role === 'store') return 'var(--lime-light)'
-    return 'var(--text-muted)'
-  }
+  const navItems = role === 'admin' ? ADMIN_NAV : role === 'store' ? STORE_NAV : []
 
   return (
     <header style={styles.header}>
       <div style={styles.container}>
-        {/* Logo e Nome do Sistema */}
+
+        {/* Logo */}
         <div style={styles.logoSection}>
-          <div style={styles.logoWrapper}>
-            <img
-              src="/ouroboros.png"
-              alt="Ouroboros"
-              style={{
-                width: '40px',
-                height: '40px',
-                filter: 'drop-shadow(0 0 8px var(--lime-glow))',
-                animation: 'spin 20s linear infinite'
-              }}
-            />
-          </div>
-          <div style={styles.titleWrapper}>
-            <h1 style={styles.title}>Ouroboros</h1>
-            <span style={{ ...styles.roleTag, color: getRoleColor() }}>
-              {getRoleName()}
-            </span>
-          </div>
+          <img
+            src="/ouroboros.png"
+            alt="Ouroboros"
+            style={{ width: 36, height: 36, filter: 'drop-shadow(0 0 8px var(--lime-glow))', animation: 'spin 20s linear infinite' }}
+          />
+          <h1 style={styles.title}>Ouroboros</h1>
         </div>
 
-        {/* Seção de Status e Ações */}
+        {/* Navegação central */}
+        {navItems.length > 0 && (
+          <nav style={styles.nav}>
+            {navItems.map(({ path, icon: Icon, label }) => {
+              const active = location.pathname === path
+              return (
+                <button
+                  key={path}
+                  onClick={() => navigate(path)}
+                  style={{ ...styles.navBtn, ...(active ? styles.navBtnActive : {}) }}
+                  title={label}
+                >
+                  <Icon size={15} />
+                  <span style={styles.navLabel}>{label}</span>
+                </button>
+              )
+            })}
+          </nav>
+        )}
+
+        {/* Ações à direita */}
         <div style={styles.rightSection}>
 
           {/* Relógio */}
           <div style={styles.chip}>
-            <Clock size={16} />
+            <Clock size={15} />
             <span style={styles.chipText}>
               {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
             </span>
@@ -80,47 +90,26 @@ export default function Header({
               style={{ ...styles.chip, color: isConnected ? 'var(--lime-primary)' : 'var(--danger)' }}
               title={isConnected ? 'Conectado' : 'Desconectado'}
             >
-              {isConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
+              {isConnected ? <Wifi size={15} /> : <WifiOff size={15} />}
             </div>
+          )}
+
+          {/* Gerenciar Lojas */}
+          {role === 'admin' && onManageStores && (
+            <button onClick={onManageStores} style={styles.chip} title="Gerenciar Lojas">
+              <Store size={15} />
+            </button>
           )}
 
           {/* Tema */}
           <button onClick={toggleTheme} style={styles.chip} title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}>
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
-
-          {/* Gerenciar Lojas (admin) */}
-          {role === 'admin' && onManageStores && (
-            <button onClick={onManageStores} style={styles.chip} title="Gerenciar Lojas">
-              <Store size={16} />
-            </button>
-          )}
-
-          {/* Analytics (admin) */}
-          {role === 'admin' && (
-            <button onClick={() => window.open('/analytics', '_blank')} style={styles.chip} title="Abrir Analytics">
-              <BarChart3 size={16} />
-            </button>
-          )}
-
-          {/* Distribuição de Caixas (admin) */}
-          {role === 'admin' && (
-            <button onClick={() => navigate('/admin/distribution')} style={styles.chip} title="Gerenciar Distribuição">
-              <Package size={16} />
-            </button>
-          )}
-
-          {/* Packing / Montagem (admin/voluntário logado) */}
-          {role === 'admin' && (
-            <button onClick={() => navigate('/packing')} style={styles.chip} title="Montagem de Caixas (Packing)">
-              <ClipboardList size={16} />
-            </button>
-          )}
 
           {/* Logout */}
           {role !== 'analytics' && (
             <button onClick={handleLogout} style={styles.chip} title="Sair">
-              <LogOut size={16} />
+              <LogOut size={15} />
               <span style={styles.chipText} data-header-logout-text="">Sair</span>
             </button>
           )}
@@ -135,7 +124,7 @@ const styles = {
   header: {
     background: 'var(--bg-card)',
     borderBottom: '1px solid var(--border-lime)',
-    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
     position: 'sticky',
     top: 0,
     zIndex: 1000,
@@ -144,58 +133,75 @@ const styles = {
   container: {
     maxWidth: '1600px',
     margin: '0 auto',
-    padding: '16px 24px',
+    padding: '0 24px',
+    height: 60,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '24px',
+    gap: 16,
   },
   logoSection: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
-  },
-  logoWrapper: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  titleWrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
+    gap: 10,
+    flexShrink: 0,
   },
   title: {
-    fontSize: '1.5rem',
+    fontSize: '1.1rem',
     fontWeight: 700,
     color: 'var(--text-main)',
     margin: 0,
     letterSpacing: '-0.02em',
   },
-  roleTag: {
-    fontSize: '0.75rem',
+  nav: {
+    display: 'flex',
+    alignItems: 'stretch',
+    alignSelf: 'stretch',
+    gap: 4,
+  },
+  navBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '0 14px',
+    background: 'transparent',
+    border: '1px solid transparent',
+    borderRadius: 6,
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '0.85rem',
+    fontWeight: 500,
+    transition: 'all 0.15s ease',
+  },
+  navBtnActive: {
+    background: 'var(--lime-glow)',
+    border: '1px solid var(--border-lime)',
+    color: 'var(--lime-primary)',
+  },
+  navLabel: {
+    fontSize: '0.85rem',
     fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    opacity: 0.9,
   },
   rightSection: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: 6,
+    flexShrink: 0,
   },
   chip: {
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
-    padding: '8px 12px',
+    gap: 6,
+    padding: '7px 12px',
     background: 'var(--lime-glow)',
     border: '1px solid var(--border-lime)',
-    borderRadius: '6px',
+    borderRadius: 6,
     color: 'var(--lime-primary)',
     cursor: 'pointer',
     fontFamily: 'inherit',
-    transition: 'all 0.2s ease',
+    transition: 'all 0.15s ease',
   },
   chipText: {
     fontSize: '0.85rem',
@@ -204,20 +210,9 @@ const styles = {
   },
 }
 
-// Adicionar keyframes CSS globalmente (será injetado via style tag)
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style')
   styleSheet.textContent = `
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-      }
-      50% {
-        opacity: 0.6;
-        transform: scale(0.9);
-      }
-    }
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
@@ -225,15 +220,15 @@ if (typeof document !== 'undefined') {
     header button:hover {
       background: var(--border-lime) !important;
       border-color: var(--lime-primary) !important;
+      color: var(--lime-primary) !important;
       transform: translateY(-1px);
     }
-    header button:active {
-      transform: translateY(0);
+    header button:active { transform: translateY(0); }
+    @media (max-width: 768px) {
+      [data-header-logout-text] { display: none; }
     }
-    @media (max-width: 640px) {
-      [data-header-logout-text] {
-        display: none;
-      }
+    @media (max-width: 600px) {
+      header nav span { display: none; }
     }
   `
   if (!document.querySelector('style[data-header-styles]')) {

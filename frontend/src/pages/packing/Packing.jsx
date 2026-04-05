@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ConfigProvider, theme, Modal, Typography, Progress, Badge, Empty, Space, App } from 'antd';
-import { Package, CheckCircle2, User, Clock, AlertCircle, ArrowLeft, ClipboardList, PackageCheck, Play } from 'lucide-react';
+import { ConfigProvider, theme as antdTheme, Modal, Typography, Progress, Badge, Empty, Space, message, notification } from 'antd';
+import { Package, CheckCircle2, User, Clock, AlertCircle, ClipboardList, PackageCheck, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BACKEND_HTTP } from '../../config';
 import { usePackingWebSocket } from '../../hooks/usePackingWebSocket';
@@ -17,7 +17,6 @@ const Packing = () => {
   const [selectedBox, setSelectedBox] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [packerName, setPackerName] = useState(localStorage.getItem('packerName') || '');
-  const { message, notification } = App.useApp();
 
   const token = sessionStorage.getItem('ouroboros_token');
 
@@ -124,26 +123,7 @@ const Packing = () => {
     }
   };
 
-  if (loading) return <div className="packing-container"><Text style={{color: 'white'}}>Carregando Canais de Distribuição...</Text></div>;
-
-  if (!data) {
-    return (
-      <Layout role="admin" isConnected={status === 'connected'}>
-        <div className="packing-container">
-          <div className="glass-panel text-center py-20 animate-fade-in" style={{ padding: '80px 20px' }}>
-            <Empty 
-              image={<Package size={64} style={{ color: 'var(--lime-primary)', opacity: 0.3, margin: '0 auto' }} />}
-              description={<Title level={4} style={{ color: 'var(--text-main)' }}>Aguardando Distribuição</Title>}
-            >
-              <Text type="secondary">Nenhuma rodada ativa no momento. Aguarde o comando do Banco Central.</Text>
-            </Empty>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  const { distribution, boxes, stats } = data;
+  const { distribution, boxes, stats } = data || {};
 
   return (
     <ConfigProvider
@@ -168,35 +148,53 @@ const Packing = () => {
                 <Badge status={status === 'connected' ? 'processing' : 'error'} text={status === 'connected' ? 'Sincronizado' : 'Offline'} />
               </div>
             </div>
-            
-            <div className="glass-panel stats-strip">
-              <div className="dist-name">
-                <Clock size={14} /> Ativo: {distribution.name}
+
+            {!loading && data && (
+              <div className="glass-panel stats-strip">
+                <div className="dist-name">
+                  <Clock size={14} /> Ativo: {distribution.name}
+                </div>
+                <div className="stat-counters">
+                  <div className="counter-item">
+                    <span className="label">LIVRES</span>
+                    <span className="val">{stats.pending}</span>
+                  </div>
+                  <div className="counter-item">
+                    <span className="label" style={{color: 'var(--warning)'}}>EM MÃOS</span>
+                    <span className="val" style={{color: 'var(--warning)'}}>{stats.in_progress}</span>
+                  </div>
+                  <div className="counter-item">
+                    <span className="label" style={{color: 'var(--success)'}}>CONCLUÍDAS</span>
+                    <span className="val" style={{color: 'var(--success)'}}>{stats.done}</span>
+                  </div>
+                </div>
+                <Progress
+                  percent={Math.round((stats.done / stats.total_boxes) * 100)}
+                  status="active"
+                  strokeColor={{ '0%': 'var(--lime-primary)', '100%': 'var(--lime-light)' }}
+                  style={{ marginTop: 12 }}
+                  showInfo={false}
+                />
               </div>
-              <div className="stat-counters">
-                <div className="counter-item">
-                  <span className="label">LIVRES</span>
-                  <span className="val">{stats.pending}</span>
-                </div>
-                <div className="counter-item">
-                  <span className="label" style={{color: 'var(--warning)'}}>EM MÃOS</span>
-                  <span className="val" style={{color: 'var(--warning)'}}>{stats.in_progress}</span>
-                </div>
-                <div className="counter-item">
-                  <span className="label" style={{color: 'var(--success)'}}>CONCLUÍDAS</span>
-                  <span className="val" style={{color: 'var(--success)'}}>{stats.done}</span>
-                </div>
-              </div>
-              <Progress 
-                percent={Math.round((stats.done / stats.total_boxes) * 100)} 
-                status="active" 
-                strokeColor={{ '0%': 'var(--lime-primary)', '100%': 'var(--lime-light)' }}
-                style={{ marginTop: 12 }}
-                showInfo={false}
-              />
-            </div>
+            )}
           </header>
 
+          {loading && (
+            <Text style={{ color: 'var(--text-muted)', display: 'block', textAlign: 'center', marginTop: 64 }}>Carregando...</Text>
+          )}
+
+          {!loading && !data && (
+            <div className="glass-panel animate-fade-in" style={{ padding: '80px 20px', marginTop: 32, textAlign: 'center' }}>
+              <Empty
+                image={<Package size={64} style={{ color: 'var(--lime-primary)', opacity: 0.3, margin: '0 auto' }} />}
+                description={<Title level={4} style={{ color: 'var(--text-main)' }}>Aguardando Distribuição</Title>}
+              >
+                <Text type="secondary">Nenhuma rodada ativa no momento. Aguarde o comando do Banco Central.</Text>
+              </Empty>
+            </div>
+          )}
+
+          {!loading && data && (<>
           <div className="packing-grid">
             {boxes.map(box => (
               <div 
@@ -314,6 +312,7 @@ const Packing = () => {
               </div>
             )}
           </Modal>
+          </>)}
 
           <style>{`
             [data-theme="light"] .glass-panel, [data-theme="light"] .box-card-interactive {

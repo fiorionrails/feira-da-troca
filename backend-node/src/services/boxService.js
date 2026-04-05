@@ -4,20 +4,22 @@ const { distributeItems } = require('./distributionService');
 
 /**
  * Assume a responsabilidade por uma caixa (Claim)
+ * Usa UPDATE atômico com WHERE para evitar race condition entre voluntários.
  */
 function claimBox(boxId, responsibleName) {
   const db = getDb();
-  
-  // Transação atômica para garantir que não foi pega por outro
-  const box = db.prepare('SELECT responsible_name, box_number FROM boxes WHERE id = ?').get(boxId);
-  if (!box) throw new Error('Caixa não encontrada.');
-  if (box.responsible_name) throw new Error(`Esta caixa já foi assumida por ${box.responsible_name}.`);
 
-  db.prepare(`
-    UPDATE boxes 
-    SET responsible_name = ?, status = 'in_progress', claimed_at = ? 
-    WHERE id = ?
+  const info = db.prepare(`
+    UPDATE boxes
+    SET responsible_name = ?, status = 'in_progress', claimed_at = ?
+    WHERE id = ? AND responsible_name IS NULL AND status = 'pending'
   `).run(responsibleName, new Date().toISOString(), boxId);
+
+  if (info.changes === 0) {
+    const box = db.prepare('SELECT responsible_name, box_number FROM boxes WHERE id = ?').get(boxId);
+    if (!box) throw new Error('Caixa não encontrada.');
+    throw new Error(`Caixa #${box.box_number} já foi assumida por ${box.responsible_name}.`);
+  }
 
   return true;
 }
