@@ -22,16 +22,15 @@ sequenceDiagram
     API-->>Admin: WS: comanda_created {comanda_id, code: "F001", balance}
     API-->>Outros: WS: update_next_code {next_code: "F002"}
     
-    Note over API,FB: sync assíncrono (background task)
-    API->>FB: write comanda + evento (best-effort)
-    FB-->>API: ok (ou timeout — ignorado)
+    Note over API,FB: ⚠️ sync com Firebase NÃO está implementado (ideia futura)
+    Note over API,FB: O campo synced_to_firebase existe no banco como preparação
 ```
 
 **Pontos de atenção:**
 
 - O código da comanda (`code`) é gerado no servidor no formato `F001`, `F002`, etc.
 - O WebSocket garante que todos os ~5 operadores vejam o próximo código disponível em tempo real, evitando duplicidade.
-- Se o Firebase estiver offline, a comanda ainda é criada normalmente
+- A comanda é criada inteiramente local — sem nenhuma dependência de internet
 
 ---
 
@@ -63,8 +62,7 @@ sequenceDiagram
         API-->>WS: debit_confirmed {new_balance, event_id}
         API-->>Outros: broadcast: balance_updated {comanda_id, new_balance}
         
-        Note over API,FB: sync assíncrono
-        API->>FB: write event
+        Note over API,FB: ⚠️ sync com Firebase NÃO está implementado (ideia futura)
     else saldo insuficiente
         API-->>WS: debit_rejected {reason: insufficient_balance, current_balance}
     end
@@ -80,9 +78,12 @@ sequenceDiagram
 
 ---
 
-## 3. Consulta de saldo pelo cliente
+## 3. Consulta de saldo pelo cliente (ideia futura — não implementada)
 
-O participante quer saber quanto tem no celular, sem interagir com nenhuma loja.
+!!! warning "Não implementado"
+    Este fluxo descreve uma funcionalidade **planejada mas não implementada**. Atualmente não há sync com Firebase, então o cliente não tem como consultar saldo pelo celular via Firestore. Esta seção documenta a intenção arquitetural para referência futura.
+
+Um participante quer saber quanto tem no celular, sem interagir com nenhuma loja.
 
 ```mermaid
 sequenceDiagram
@@ -158,18 +159,15 @@ sequenceDiagram
     Servidor->>DB: open ouroboros.db
     DB-->>Servidor: estado completo restaurado (WAL mode)
     
-    Servidor->>Servidor: inicia worker de sync Firebase
     Servidor->>Servidor: abre porta WebSocket
     
     Terminais->>Servidor: reconnect automático
     Servidor-->>Terminais: connected + estado atual
     
     Note over Servidor: operação normal retomada
-    Note over Servidor: eventos não-synced são enviados ao Firebase
 ```
 
 **Pontos de atenção:**
 
 - O SQLite com WAL mode garante que nenhum evento confirmado é perdido
-- O worker de sync ao reiniciar identifica eventos com `synced = 0` e os envia
 - O downtime é o tempo de restart do servidor (tipicamente < 10 segundos)
