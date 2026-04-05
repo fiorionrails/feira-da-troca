@@ -3,9 +3,10 @@ const path = require('path');
 const config = require('./config');
 const log = require('./logger');
 
-// Segurança contra o ambiente virtual do PKG (/snapshot/...)
-// Se estiver rodando como executável, gravamos o BD na mesma pasta do .exe físico!
-const basePath = process.pkg ? path.dirname(process.execPath) : path.join(__dirname, '..');
+// OUROBOROS_DATA_DIR permite que o launcher Tauri defina onde ficam .db e better_sqlite3.node.
+// Fallback: ao lado do .exe (pkg) ou raiz do projeto (dev).
+const basePath = process.env.OUROBOROS_DATA_DIR ||
+  (process.pkg ? path.dirname(process.execPath) : path.join(__dirname, '..'));
 
 const DB_PATH = path.isAbsolute(config.databaseUrl)
   ? config.databaseUrl
@@ -19,7 +20,10 @@ function getDb() {
     
     const dbOptions = {};
     if (process.pkg) {
-      dbOptions.nativeBinding = path.join(basePath, 'better_sqlite3.node');
+      // BETTER_SQLITE3_BINDING pode ser passado pelo launcher para apontar
+      // para o .node nativo extraído nos recursos do Tauri.
+      dbOptions.nativeBinding = process.env.BETTER_SQLITE3_BINDING ||
+        path.join(basePath, 'better_sqlite3.node');
     }
 
     _db = new Database(DB_PATH, dbOptions);

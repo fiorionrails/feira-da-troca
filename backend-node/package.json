@@ -9,7 +9,9 @@
     "dev": "node --watch src/app.js",
     "db:init": "node manage.js",
     "test": "node --test --test-reporter=spec tests/utils.test.js tests/services.test.js tests/rest.test.js tests/ws.test.js tests/concurrency.test.js",
-    "stress": "node stress_test.js"
+    "stress": "node stress_test.js",
+    "pkg:win": "pkg src/app.js --target node18-win-x64 --output ../launcher/src-tauri/binaries/ouroboros-backend-x86_64-pc-windows-msvc.exe",
+    "pkg:linux": "pkg src/app.js --target node18-linux-x64 --output ../launcher/src-tauri/binaries/ouroboros-backend-x86_64-unknown-linux-gnu"
   },
   "dependencies": {
     "better-sqlite3": "11.9.1",

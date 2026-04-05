@@ -1,8 +1,10 @@
 const path = require('path');
 const fs = require('fs');
 
-// Se estiver rodando como executável (PKG), busca o .env ao lado do .exe físico!
-const envDir = process.pkg ? path.dirname(process.execPath) : process.cwd();
+// OUROBOROS_DATA_DIR permite que o launcher Tauri defina onde ficam .env e .db.
+// Fallback: ao lado do .exe (pkg) ou cwd (dev).
+const envDir = process.env.OUROBOROS_DATA_DIR ||
+  (process.pkg ? path.dirname(process.execPath) : process.cwd());
 const envPath = path.join(envDir, '.env');
 
 if (fs.existsSync(envPath)) {
@@ -45,9 +47,20 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
-app.get('/', (req, res) => {
+// Endpoint de saúde (sempre disponível)
+app.get('/api/health', (req, res) => {
   res.json({ status: 'online', mode: 'local-first', event: config.eventName });
 });
+
+// Em modo dev (sem FRONTEND_DIST) mantém o endpoint raiz para conveniência
+const staticDir = process.env.FRONTEND_DIST ||
+  (process.pkg ? path.join(path.dirname(process.execPath), 'public') : null);
+
+if (!staticDir) {
+  app.get('/', (req, res) => {
+    res.json({ status: 'online', mode: 'local-first', event: config.eventName });
+  });
+}
 
 app.use('/api', restRouter);
 
@@ -76,6 +89,14 @@ server.on('upgrade', (request, socket, head) => {
     socket.destroy();
   }
 });
+
+// Serve frontend estático (modo launcher/pkg). Deve vir após todas as rotas de API.
+if (staticDir && fs.existsSync(staticDir)) {
+  app.use(express.static(staticDir));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(staticDir, 'index.html'));
+  });
+}
 
 // Only start listening when executed directly (not when imported by tests)
 if (require.main === module) {

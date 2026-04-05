@@ -1,0 +1,127 @@
+name: Release Launcher
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            pkg_target: node18-win-x64
+            binary_name: ouroboros-backend-x86_64-pc-windows-msvc.exe
+            node_path: better_sqlite3.node
+
+          - platform: ubuntu-22.04
+            pkg_target: node18-linux-x64
+            binary_name: ouroboros-backend-x86_64-unknown-linux-gnu
+            node_path: better_sqlite3.node
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── Rust ──────────────────────────────────────────────────
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: launcher/src-tauri
+
+      # ── Node.js ───────────────────────────────────────────────
+      - name: Instalar Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: |
+            backend-node/package-lock.json
+            frontend/package-lock.json
+            launcher/package-lock.json
+
+      # ── Dependências Linux ────────────────────────────────────
+      - name: Instalar dependências de sistema (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            libssl-dev
+
+      # ── Build do Frontend ─────────────────────────────────────
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copiar frontend dist para recursos do Tauri
+        shell: bash
+        run: |
+          mkdir -p launcher/src-tauri/resources/frontend-dist
+          cp -r frontend/dist/. launcher/src-tauri/resources/frontend-dist/
+
+      # ── Compilar backend com pkg ──────────────────────────────
+      - name: Instalar dependências do backend
+        working-directory: backend-node
+        run: npm ci
+
+      - name: Compilar backend com pkg (${{ matrix.platform }})
+        working-directory: backend-node
+        run: |
+          mkdir -p ../launcher/src-tauri/binaries
+          npx pkg src/app.js \
+            --target ${{ matrix.pkg_target }} \
+            --output ../launcher/src-tauri/binaries/${{ matrix.binary_name }}
+
+      - name: Copiar better_sqlite3.node para recursos
+        shell: bash
+        run: |
+          mkdir -p launcher/src-tauri/resources
+          cp backend-node/node_modules/better-sqlite3/build/Release/better_sqlite3.node \
+             launcher/src-tauri/resources/better_sqlite3.node
+
+      # ── Gerar ícones ──────────────────────────────────────────
+      - name: Gerar ícones do launcher
+        working-directory: launcher
+        run: |
+          npm ci
+          npx tauri icon ../docs/assets/icon.png || true
+
+      # ── Build Tauri ───────────────────────────────────────────
+      - name: Build Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: launcher
+          tagName: ${{ github.ref_name }}
+          releaseName: "Ouroboros Launcher ${{ github.ref_name }}"
+          releaseBody: |
+            ## Ouroboros Launcher ${{ github.ref_name }}
+
+            Sistema de economia digital para feiras escolares.
+            Baixe o instalador para seu sistema operacional e execute — sem precisar instalar Node.js ou Docker.
+
+            ### Windows
+            - `Ouroboros.Launcher_x.x.x_x64-setup.exe` — instalador NSIS (recomendado)
+
+            ### Linux
+            - `ouroboros-launcher_x.x.x_amd64.AppImage` — portável, sem instalação
+
+            ---
+            Para usar via linha de comando, veja o [README](https://github.com/${{ github.repository }}).
+          releaseDraft: true
+          prerelease: false

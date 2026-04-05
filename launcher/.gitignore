@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/resources/better_sqlite3.node
+src-tauri/resources/frontend-dist/
+src-tauri/gen/
