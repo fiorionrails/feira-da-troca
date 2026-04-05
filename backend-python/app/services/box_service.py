@@ -5,18 +5,22 @@ from app.services.distribution_service import distribute_items
 
 def claim_box(box_id: str, responsible_name: str):
     with get_db_connection() as conn:
-        box = conn.execute('SELECT responsible_name FROM boxes WHERE id = ?', (box_id,)).fetchone()
-        if not box:
-            raise ValueError("Caixa não encontrada.")
-        if box['responsible_name']:
-            raise ValueError(f"Esta caixa já foi assumida por {box['responsible_name']}.")
-
-        conn.execute("""
-            UPDATE boxes 
-            SET responsible_name = ?, status = 'in_progress', claimed_at = ? 
-            WHERE id = ?
+        # Atomic UPDATE with WHERE guard to prevent race conditions between volunteers
+        result = conn.execute("""
+            UPDATE boxes
+            SET responsible_name = ?, status = 'in_progress', claimed_at = ?
+            WHERE id = ? AND responsible_name IS NULL AND status = 'pending'
         """, (responsible_name, datetime.now().isoformat(), box_id))
         conn.commit()
+
+        if result.rowcount == 0:
+            box = conn.execute('SELECT responsible_name, box_number, status FROM boxes WHERE id = ?', (box_id,)).fetchone()
+            if not box:
+                raise ValueError("Caixa não encontrada.")
+            if box['responsible_name']:
+                raise ValueError(f"Caixa #{box['box_number']} já foi assumida por {box['responsible_name']}.")
+            raise ValueError(f"Caixa #{box['box_number']} não está disponível para ser assumida (status: {box['status']}).")
+
     return True
 
 def complete_box(box_id: str):
@@ -121,3 +125,4 @@ def recalculate_pending_boxes(conn, distribution_id: str):
                 'INSERT INTO box_items (id, box_id, category_id, target_quantity) VALUES (?, ?, ?, ?)',
                 (str(uuid4()), real_box_id, cat_id, qty)
             )
+    conn.commit()

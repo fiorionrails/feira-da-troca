@@ -14,7 +14,7 @@ class InvalidAmountError(Exception):
 
 def process_debit(conn, comanda_id: str, amount: int, store_id: str, note: str = None) -> Event:
     """Processa um débito atomicamente validando o saldo."""
-    if amount <= 0:
+    if not isinstance(amount, int) or amount <= 0:
         raise InvalidAmountError("O valor do débito deve ser maior que zero.")
 
     cursor = conn.cursor()
@@ -35,12 +35,13 @@ def process_debit(conn, comanda_id: str, amount: int, store_id: str, note: str =
 
     cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
     row = cursor.fetchone()
+    conn.commit()
     return Event(**dict(row))
 
 
 def process_credit(conn, comanda_id: str, amount: int, store_id: str = None, note: str = None) -> Event:
     """Processa um crédito direto para uma comanda."""
-    if amount <= 0:
+    if not isinstance(amount, int) or amount <= 0:
         raise InvalidAmountError("O valor do crédito deve ser maior que zero.")
 
     cursor = conn.cursor()
