@@ -17,7 +17,6 @@ O núcleo do sistema. Roda em qualquer máquina na rede local (um notebook comum
 - Processar e persistir todas as transações
 - Manter o event store imutável (SQLite)
 - Transmitir eventos em tempo real via WebSocket
-- Sincronizar eventos confirmados pro Firebase de forma assíncrona
 
 **Stack:** Node.js + Express **ou** Python + FastAPI + Uvicorn, ambos com SQLite (WAL mode)
 
@@ -47,11 +46,14 @@ Interface de gestão para organizadores e sub-administradores (operadores do Ban
 !!! note "Sobre o frontend"
     O frontend React incluído é uma **interface de demonstração básica**. Implementa todos os fluxos (login, emissão de comandas, carrinho de vendas, débito, gestão de lojas) mas foi construído com foco em funcionalidade, não em design final. A interface pode ser livremente redesenhada, customizada ou substituída por qualquer tecnologia frontend — o backend (API REST + WebSocket) é a camada estável.
 
-### Firebase Firestore (camada de leitura)
+### Firebase Firestore (ideia não implementada)
+
+!!! warning "Não implementado"
+    A integração com Firebase descrita abaixo é uma **ideia futura**, não uma funcionalidade implementada. O campo `synced_to_firebase` existe no banco de dados como preparação, mas nenhum código de sync foi escrito. O sistema funciona 100% sem Firebase.
 
 Espelho eventual dos eventos confirmados. Nunca é consultado pelo servidor principal durante operações críticas.
 
-**Responsabilidades:**
+**Responsabilidades planejadas:**
 
 - Receber eventos síncronizados do servidor (quando há internet)
 - Servir consultas de saldo para o cliente final (celular)
@@ -88,7 +90,7 @@ graph TB
         app["Browser\n(consulta saldo)"]
     end
     
-    servidor -- "sync assíncrono\nbest-effort" --> firebase
+    servidor -- "sync assíncrono\nbest-effort\n(não implementado)" --> firebase
     firebase -- "leitura" --> app
 ```
 
@@ -107,7 +109,7 @@ O Banco é responsável pela entrada de novos produtos no ecossistema da feira. 
 
 ## Modelo de dados
 
-O sistema opera com **cinco entidades centrais**:
+O sistema opera com **sete tabelas** (quatro core + três para distribuição/packing) e duas views derivadas:
 
 ```
 Comanda
@@ -123,7 +125,7 @@ Event
   amount: integer (centavos fictícios)
   store_id: UUID → Store
   timestamp: timestamp
-  synced_to_firebase: boolean
+  synced_to_firebase: integer (reservado para uso futuro — não implementado)
 
 Store
   id: UUID
@@ -141,6 +143,37 @@ Category (Tabela de Preços e Categorização)
 Balance (view derivada — nunca armazenada diretamente)
   comanda_id: UUID
   balance: SUM(credits) - SUM(debits)
+
+store_box_count (view derivada — totalizador de caixas por loja)
+  store_id: UUID
+  store_name: string
+  boxes_total: integer
+  boxes_done: integer
+
+Distribution (rodada de distribuição de caixas)
+  id: UUID
+  name: string
+  num_boxes: integer
+  status: ENUM (planning | active | complete)
+  needs_recalc: boolean
+  created_at: timestamp
+  completed_at: timestamp
+
+Box (caixa física de produtos)
+  id: UUID
+  distribution_id: UUID → Distribution
+  box_number: integer
+  assigned_store_id: UUID → Store
+  responsible_name: string (voluntário responsável)
+  status: ENUM (pending | in_progress | done)
+  claimed_at: timestamp
+  completed_at: timestamp
+
+BoxItem (itens planejados para uma caixa)
+  id: UUID
+  box_id: UUID → Box
+  category_id: UUID → Category
+  target_quantity: integer
 ```
 
 !!! info "Por que saldo é uma view?"
@@ -157,7 +190,6 @@ Balance (view derivada — nunca armazenada diretamente)
 3. Servidor valida saldo disponível consultando o event store
 4. Se válido: persiste o evento no SQLite, retorna `debit_confirmed`
 5. Todos os outros terminais conectados recebem broadcast do evento
-6. Worker assíncrono enfileira o evento para sync com Firebase
 
 **Tempo de resposta esperado:** < 50ms na rede local (SQLite + loopback)
 

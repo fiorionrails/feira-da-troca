@@ -56,9 +56,15 @@ ws://host/ws/store?token=<store_terminal_token>
 |---|---|
 | Tamanho máximo do body (REST) | `10 KB` |
 | Conexões admin simultâneas (WebSocket) | `10` |
-| Conexões de loja simultâneas (WebSocket) | `100` |
-| Mensagens por minuto por conexão WebSocket | Admin: `120` / Loja: `60` |
+| Conexões de loja simultâneas (WebSocket) | Configurável via `MAX_STORE_CONNECTIONS` no `.env` (padrão: `100`) |
+| Mensagens por minuto por conexão WebSocket | `300` (admin e loja) |
 | Máximo de comandas | Configurável via `MAX_COMANDAS` no `.env` (padrão: `1000`) |
+
+!!! tip "Variáveis opcionais de ambiente"
+    Além das variáveis documentadas no guia de setup, existem duas variáveis opcionais para uso interno:
+
+    - `MAX_STORE_CONNECTIONS` — limite de conexões WebSocket simultâneas de loja (padrão: `100`)
+    - `STRESS_NO_RATELIMIT=true` — desativa o rate limiting de WebSocket para testes de carga (nunca usar em produção)
 
 ---
 
@@ -221,7 +227,7 @@ Cria uma nova loja com token de terminal gerado automaticamente.
 
 !!! note "Formato do token de loja"
     O token gerado é uma string de **6 caracteres** alfanuméricos maiúsculos (ex: `XJ92KF`).
-    O alfabeto exclui caracteres ambíguos (`0`, `O`, `1`, `I`) para facilitar a leitura e digitação em terminais de loja.
+    O alfabeto utilizado é `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` — exclui os caracteres ambíguos `0`, `O`, `1`, `I` e `L` para facilitar leitura e digitação, e usa apenas os dígitos `2-9`.
 
 **Erros:**
 ```json
@@ -314,7 +320,9 @@ Cria uma nova categoria de produto/preço.
 {
   "id": "uuid-gerado",
   "name": "Bolsa",
-  "price": 1500
+  "price": 1500,
+  "total_entries": 0,
+  "total_exits": 0
 }
 ```
 
@@ -323,6 +331,277 @@ Cria uma nova categoria de produto/preço.
 { "detail": "name is required" }                      // 400
 { "detail": "price must be a positive integer" }      // 400
 { "detail": "Categoria já existe" }                   // 400
+```
+
+---
+
+### Distribuição e Packing
+
+O sistema de distribuição organiza os produtos cadastrados em caixas e as entrega às lojas participantes, com controle de montagem por voluntários.
+
+#### `GET /api/distribution`
+
+Lista todas as rodadas de distribuição cadastradas.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Rodada 1",
+    "num_boxes": 10,
+    "status": "planning",
+    "needs_recalc": 0,
+    "created_at": "2025-11-15T10:00:00Z",
+    "completed_at": null
+  }
+]
+```
+
+**Status possíveis:** `planning`, `active`, `complete`
+
+#### `POST /api/distribution`
+
+Cria uma nova rodada de distribuição.
+
+**Auth:** Admin
+
+**Request body:**
+```json
+{
+  "name": "Rodada 1",
+  "num_boxes": 10
+}
+```
+
+**Response `201`:**
+```json
+{
+  "id": "uuid-gerado",
+  "name": "Rodada 1",
+  "num_boxes": 10,
+  "status": "planning"
+}
+```
+
+**Erros:**
+```json
+{ "detail": "name and num_boxes are required" }  // 400
+```
+
+#### `GET /api/distribution/suggest`
+
+Sugere automaticamente o número ideal de caixas com base no inventário cadastrado (categorias com `total_entries > 0`) e no número de lojas registradas.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+{
+  "suggested": 12,
+  "reasoning": "10 lojas, 180 itens → mínimo 10 caixas (1/loja), ideal 12 caixas (~15 itens/caixa)"
+}
+```
+
+#### `GET /api/distribution/{id}`
+
+Retorna os detalhes completos de uma rodada, incluindo todas as caixas e seus itens.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+{
+  "distribution": {
+    "id": "uuid",
+    "name": "Rodada 1",
+    "num_boxes": 10,
+    "status": "active",
+    "needs_recalc": 0,
+    "created_at": "2025-11-15T10:00:00Z",
+    "completed_at": null
+  },
+  "boxes": [
+    {
+      "id": "uuid-caixa",
+      "distribution_id": "uuid",
+      "box_number": 1,
+      "assigned_store_id": "uuid-loja",
+      "store_name": "Cantina Italiana",
+      "responsible_name": null,
+      "status": "pending",
+      "claimed_at": null,
+      "completed_at": null,
+      "items": [
+        { "category_name": "Jaqueta", "target_quantity": 3 }
+      ]
+    }
+  ]
+}
+```
+
+**Status de caixa possíveis:** `pending`, `in_progress`, `done`
+
+Retorna `404` se o ID não existir.
+
+#### `POST /api/distribution/{id}/calculate`
+
+Executa o algoritmo de distribuição round-robin, calculando quais itens vão em quais caixas com base no inventário atual das categorias (`total_entries`). Substitui qualquer cálculo anterior da rodada.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+{
+  "message": "Distribuição calculada com sucesso",
+  "warnings": [
+    "\"Bolsa\" tem apenas 3 itens — 7 caixa(s) ficarão sem esta categoria."
+  ]
+}
+```
+
+**Erros:**
+```json
+{ "detail": "Distribution not found" }                              // 404
+{ "detail": "Nenhuma loja cadastrada para receber caixas." }        // 400
+{ "detail": "Nenhum produto cadastrado para distribuir." }          // 400
+{ "detail": "Impossível criar N caixas com apenas M itens." }       // 400
+```
+
+#### `DELETE /api/distribution/{id}`
+
+Remove uma rodada e todas as suas caixas e itens. Se a rodada estiver ativa e houver caixas com status `in_progress`, retorna `409`.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+{ "message": "Rodada excluída." }
+```
+
+**Erros:**
+```json
+{ "detail": "Distribution not found" }                                            // 404
+{ "detail": "Não é possível excluir: 2 caixa(s) estão sendo montadas agora." }   // 409
+```
+
+#### `PUT /api/distribution/{id}/activate`
+
+Ativa uma rodada para início do packing. Arquiva automaticamente qualquer rodada ativa anterior (status → `complete`). Transmite `distribution_status_changed` via WebSocket Packing para todos os voluntários conectados.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+{ "status": "active" }
+```
+
+**Erros:**
+```json
+{ "detail": "Distribution not found" }  // 404
+```
+
+---
+
+### Packing (Voluntários de Montagem)
+
+Rotas usadas pelos voluntários que montam fisicamente as caixas de produto.
+
+#### `GET /api/packing/active`
+
+Retorna a rodada de distribuição ativa com todas as caixas e estatísticas de progresso.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+{
+  "distribution": {
+    "id": "uuid",
+    "name": "Rodada 1",
+    "status": "active"
+  },
+  "boxes": [
+    {
+      "id": "uuid-caixa",
+      "box_number": 1,
+      "store_name": "Cantina Italiana",
+      "responsible_name": null,
+      "status": "pending",
+      "items": [
+        { "category_name": "Jaqueta", "target_quantity": 3 }
+      ]
+    }
+  ],
+  "stats": {
+    "total_boxes": 10,
+    "pending": 7,
+    "in_progress": 2,
+    "done": 1
+  }
+}
+```
+
+**Erros:**
+```json
+{ "detail": "Nenhuma distribuição ativa no momento." }  // 404
+```
+
+#### `POST /api/packing/boxes/{boxId}/claim`
+
+Um voluntário assume a responsabilidade por uma caixa. Usa UPDATE atômico (`WHERE responsible_name IS NULL AND status = 'pending'`) para evitar conflito entre dois voluntários tentando pegar a mesma caixa simultaneamente. Transmite `box_claimed` via WebSocket Packing.
+
+**Auth:** Admin
+
+**Request body:**
+```json
+{ "responsible_name": "Ana" }
+```
+
+**Response `200`:**
+```json
+{ "message": "Caixa assumida com sucesso!" }
+```
+
+**Erros:**
+```json
+{ "detail": "O seu nome é obrigatório para assumir a caixa." }   // 400
+{ "detail": "Caixa #3 já foi assumida por Carlos." }             // 409
+{ "detail": "Caixa não encontrada." }                            // 409
+```
+
+#### `POST /api/packing/boxes/{boxId}/complete`
+
+Marca a caixa como montada (`done`). Se havia sinalização de recálculo pendente (`needs_recalc = 1`) e não restam mais caixas `in_progress`, o recálculo das caixas `pending` é executado automaticamente. Transmite `box_completed` (e `distribution_recalculated` se houver recálculo) via WebSocket Packing.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+{ "message": "Caixa concluída com sucesso!", "recalc_triggered": false }
+```
+
+**Erros:**
+```json
+{ "detail": "Caixa não encontrada." }  // 400
+```
+
+#### `POST /api/packing/boxes/{boxId}/cancel`
+
+Libera uma caixa de volta para `pending`, removendo o voluntário responsável. Se havia recálculo pendente e não restam mais caixas `in_progress`, o recálculo é executado. Transmite `box_released` (e `distribution_recalculated` se houver recálculo) via WebSocket Packing.
+
+**Auth:** Admin
+
+**Response `200`:**
+```json
+{ "message": "Caixa liberada para outros voluntários.", "recalc_triggered": false }
+```
+
+**Erros:**
+```json
+{ "detail": "Caixa não encontrada." }  // 400
 ```
 
 ---
@@ -455,7 +734,7 @@ Disparado após qualquer débito confirmado no sistema. Permite que outros termi
 { "type": "error", "reason": "rate_limit_exceeded" }
 ```
 
-Enviado quando o terminal excede **60 mensagens por minuto**. O frontend deve implementar debounce ou throttle para evitar isso.
+Enviado quando o terminal excede **300 mensagens por minuto**. O frontend deve implementar debounce ou throttle para evitar isso.
 
 ---
 
@@ -649,7 +928,82 @@ Notifica quando uma categoria de produto é criada ou atualizada.
 { "type": "error", "reason": "rate_limit_exceeded" }
 ```
 
-Enviado quando o terminal excede **120 mensagens por minuto**.
+Enviado quando o terminal excede **300 mensagens por minuto**.
+
+---
+
+## WebSocket — Canal de Packing (Voluntários)
+
+Canal de broadcast para atualizações em tempo real durante a montagem de caixas. **Este canal é somente de leitura para o cliente** — todas as ações (claim, complete, cancel) são realizadas via REST para garantir atomicidade.
+
+### Conexão
+
+```
+ws://localhost:8000/ws/packing?token=<admin_token>
+```
+
+Após conectar:
+```json
+{
+  "type": "connected",
+  "role": "packer",
+  "message": "Bem-vindo ao canal de distribuição Ouroboros."
+}
+```
+
+**Erros de conexão:**
+
+| Código WS | Motivo | Causa |
+|---|---|---|
+| `4001` | `Unauthorized` | Token admin inválido |
+
+---
+
+### Mensagens do Servidor → Clientes Packing (broadcast)
+
+#### `distribution_status_changed`
+
+Disparado ao ativar uma rodada via `PUT /api/distribution/{id}/activate`.
+
+```json
+{ "type": "distribution_status_changed", "status": "active" }
+```
+
+#### `box_claimed`
+
+Disparado quando um voluntário assume uma caixa via `POST /api/packing/boxes/{boxId}/claim`.
+
+```json
+{
+  "type": "box_claimed",
+  "box_id": "uuid-caixa",
+  "responsible_name": "Ana"
+}
+```
+
+#### `box_completed`
+
+Disparado quando uma caixa é concluída via `POST /api/packing/boxes/{boxId}/complete`.
+
+```json
+{ "type": "box_completed", "box_id": "uuid-caixa" }
+```
+
+#### `box_released`
+
+Disparado quando uma caixa é liberada via `POST /api/packing/boxes/{boxId}/cancel`.
+
+```json
+{ "type": "box_released", "box_id": "uuid-caixa" }
+```
+
+#### `distribution_recalculated`
+
+Disparado quando o algoritmo de recálculo automático é executado (após `complete` ou `cancel` quando não há mais caixas `in_progress` e havia `needs_recalc = 1`).
+
+```json
+{ "type": "distribution_recalculated" }
+```
 
 ---
 
@@ -662,9 +1016,19 @@ Enviado quando o terminal excede **120 mensagens por minuto**.
 | `400` | `name is required` | Nome de loja ou categoria vazio ou só espaços |
 | `400` | `price must be a positive integer` | Preço zero, negativo ou não-inteiro em POST /categories |
 | `400` | `Categoria já existe` | Nome de categoria duplicado (case-insensitive) |
+| `400` | `name and num_boxes are required` | Campos obrigatórios ausentes em POST /distribution |
+| `400` | `Nenhuma loja cadastrada para receber caixas.` | Tentativa de calcular distribuição sem lojas |
+| `400` | `Nenhum produto cadastrado para distribuir.` | Tentativa de calcular sem categorias com entradas |
+| `400` | `Impossível criar N caixas com apenas M itens.` | Mais caixas solicitadas do que itens disponíveis |
+| `400` | `Caixa não encontrada.` | boxId inexistente em complete/cancel |
+| `400` | `O seu nome é obrigatório para assumir a caixa.` | `responsible_name` ausente em claim |
 | `401` | `Unauthorized` | Token ausente ou incorreto |
 | `404` | `Comanda não encontrada` | Código de comanda não existe |
 | `404` | `Store not found` | ID de loja não existe |
+| `404` | `Distribution not found` | ID de distribuição não existe |
+| `404` | `Nenhuma distribuição ativa no momento.` | Nenhuma rodada com status `active` |
+| `409` | `Não é possível excluir: N caixa(s) estão sendo montadas agora.` | Tentativa de excluir rodada ativa com caixas `in_progress` |
+| `409` | `Caixa #N já foi assumida por <nome>.` | Race condition em claim — caixa já assumida |
 
 ### WebSocket — `reason` nos tipos `error` e `debit_rejected`
 

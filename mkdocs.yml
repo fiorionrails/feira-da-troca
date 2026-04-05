@@ -68,6 +68,7 @@ nav:
   - Guias:
       - Setup Local: guides/setup.md
       - Plano de Resiliência: guides/resilience.md
+      - Desenvolvido com IA: guides/ai-development.md
 
 extra:
   social:
