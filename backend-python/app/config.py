@@ -1,8 +1,8 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    admin_token: str
-    secret_key: str
+    admin_token: str = "admin_token_change_me"
+    secret_key: str = "secret_key_change_me"
     database_url: str = "sqlite:///./ouroboros.db"
 
     # Firebase
@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # Evento
     event_name: str = "Feira da Troca"
     max_comandas: int = 1000
+    port: int = 8000
 
     class Config:
         env_file = ".env"

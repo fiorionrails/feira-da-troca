@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
 from pydantic import BaseModel
 import uuid
 import secrets
+from datetime import datetime, timezone
 from app.database import get_db_connection
 from app.config import settings
 
@@ -71,8 +72,12 @@ class CategoryCreate(BaseModel):
     name: str
     price: int
 
-@router.post("/categories")
+@router.post("/categories", status_code=201)
 def create_category(category: CategoryCreate, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
+    if not category.name or not category.name.strip():
+        raise HTTPException(status_code=400, detail="name is required")
+    if not isinstance(category.price, int) or category.price <= 0:
+        raise HTTPException(status_code=400, detail="price must be a positive integer")
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (category.name,))
@@ -99,8 +104,11 @@ class StoreCreate(BaseModel):
 class StoreUpdate(BaseModel):
     name: str
 
-@router.post("/stores")
+@router.post("/stores", status_code=201)
 def create_store(store: StoreCreate, token: str = Depends(verify_admin)):
+    name = store.name.strip() if store.name else ''
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
     with get_db_connection() as conn:
         cursor = conn.cursor()
         new_id = str(uuid.uuid4())
@@ -109,23 +117,26 @@ def create_store(store: StoreCreate, token: str = Depends(verify_admin)):
         terminal_token = "".join(secrets.choice(alphabet) for _ in range(6))
         cursor.execute(
             "INSERT INTO stores (id, name, theme, terminal_token) VALUES (?, ?, ?, ?)",
-            (new_id, store.name, "default", terminal_token)
+            (new_id, name, "default", terminal_token)
         )
         conn.commit()
-        return {"id": new_id, "name": store.name, "terminal_token": terminal_token}
+        return {"id": new_id, "name": name, "terminal_token": terminal_token}
 
 @router.put("/stores/{store_id}")
 def update_store(store_id: str, store: StoreUpdate, token: str = Depends(verify_admin)):
+    name = store.name.strip() if store.name else ''
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("UPDATE stores SET name = ? WHERE id = ?", (store.name, store_id))
+        cursor.execute("UPDATE stores SET name = ? WHERE id = ?", (name, store_id))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Store not found")
         conn.commit()
-        return {"id": store_id, "name": store.name}
+        return {"id": store_id, "name": name}
 
 @router.post("/stores/{store_id}/revoke_token")
-def revoke_store_token(store_id: str, token: str = Depends(verify_admin)):
+def revoke_store_token(store_id: str, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -134,10 +145,10 @@ def revoke_store_token(store_id: str, token: str = Depends(verify_admin)):
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Store not found")
         conn.commit()
-        
-        # O ideal seria desconectar o websocket ativamente aqui, 
-        # mas por isolamento, o token muda no DB. O lojista nao consegue autenticar mais.
-        return {"id": store_id, "new_token": new_token}
+
+    from app.api.ws_store import store_manager
+    background_tasks.add_task(store_manager.disconnect_store_by_id, store_id)
+    return {"id": store_id, "new_token": new_token}
 
 @router.get("/reports/analytics")
 def get_analytics():
@@ -234,7 +245,7 @@ def create_distribution(dist: DistributionCreate, token: str = Depends(verify_ad
         new_id = str(uuid.uuid4())
         cursor.execute(
             "INSERT INTO distributions (id, name, num_boxes, status, created_at) VALUES (?, ?, ?, ?, ?)",
-            (new_id, dist.name, dist.num_boxes, 'planning', datetime.now().isoformat())
+            (new_id, dist.name, dist.num_boxes, 'planning', datetime.now(timezone.utc).isoformat())
         )
         conn.commit()
         return {"id": new_id, "name": dist.name, "num_boxes": dist.num_boxes, "status": "planning"}
@@ -330,12 +341,53 @@ def calculate_distribution_endpoint(dist_id: str, token: str = Depends(verify_ad
 def activate_distribution(dist_id: str, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT id FROM distributions WHERE id = ?", (dist_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Distribution not found")
+        # Archive any previously active distribution
+        cursor.execute(
+            "UPDATE distributions SET status = 'complete' WHERE status = 'active' AND id != ?",
+            (dist_id,)
+        )
         cursor.execute("UPDATE distributions SET status = 'active' WHERE id = ?", (dist_id,))
         conn.commit()
-    
+
     from app.api.ws_packing import manager as packing_manager
     background_tasks.add_task(packing_manager.broadcast, {"type": "distribution_status_changed", "status": "active"})
     return {"status": "active"}
+
+@router.delete("/distribution/{dist_id}")
+def delete_distribution(dist_id: str, token: str = Depends(verify_admin)):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM distributions WHERE id = ?", (dist_id,))
+        dist = cursor.fetchone()
+        if not dist:
+            raise HTTPException(status_code=404, detail="Distribution not found")
+
+        if dist["status"] == "active":
+            cursor.execute(
+                "SELECT COUNT(*) as c FROM boxes WHERE distribution_id = ? AND status = 'in_progress'",
+                (dist_id,)
+            )
+            in_progress = cursor.fetchone()["c"]
+            if in_progress > 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Não é possível excluir: {in_progress} caixa(s) estão sendo montadas agora."
+                )
+
+        cursor.execute("SELECT id FROM boxes WHERE distribution_id = ?", (dist_id,))
+        boxes = cursor.fetchall()
+        if boxes:
+            box_ids = [b["id"] for b in boxes]
+            placeholders = ",".join("?" * len(box_ids))
+            cursor.execute(f"DELETE FROM box_items WHERE box_id IN ({placeholders})", tuple(box_ids))
+            cursor.execute("DELETE FROM boxes WHERE distribution_id = ?", (dist_id,))
+        cursor.execute("DELETE FROM distributions WHERE id = ?", (dist_id,))
+        conn.commit()
+
+    return {"message": "Rodada excluída."}
 
 # --- Packing API ---
 
