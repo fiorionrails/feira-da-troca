@@ -109,7 +109,7 @@ O Banco é responsável pela entrada de novos produtos no ecossistema da feira. 
 
 ## Modelo de dados
 
-O sistema opera com **oito entidades** (cinco core + três para distribuição/packing):
+O sistema opera com **sete tabelas** (quatro core + três para distribuição/packing) e duas views derivadas:
 
 ```
 Comanda
@@ -143,6 +143,12 @@ Category (Tabela de Preços e Categorização)
 Balance (view derivada — nunca armazenada diretamente)
   comanda_id: UUID
   balance: SUM(credits) - SUM(debits)
+
+store_box_count (view derivada — totalizador de caixas por loja)
+  store_id: UUID
+  store_name: string
+  boxes_total: integer
+  boxes_done: integer
 
 Distribution (rodada de distribuição de caixas)
   id: UUID
