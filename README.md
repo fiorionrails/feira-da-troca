@@ -282,6 +282,14 @@ Terminais (qualquer browser na rede WiFi)
 
 ---
 
+## Desenvolvido com IA
+
+Este projeto foi desenvolvido com assistência de **GitHub Copilot** (modo agente) e **Claude** seguindo uma metodologia de **spec-driven development**: decisões arquiteturais tomadas por mim, especificadas com precisão, e executadas pelos agentes. O ganho de produtividade não foi "escrever código mais rápido" — foi elevar o gargalo de implementação para design.
+
+> Detalhes completos: [`docs/guides/ai-development.md`](docs/guides/ai-development.md)
+
+---
+
 ## Licença
 
 MIT
