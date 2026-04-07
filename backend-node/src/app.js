@@ -47,11 +47,6 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
-// Endpoint de saúde (sempre disponível)
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'online', mode: 'local-first', event: config.eventName });
-});
-
 // Em modo dev (sem FRONTEND_DIST) mantém o endpoint raiz para conveniência
 const staticDir = process.env.FRONTEND_DIST ||
   (process.pkg ? path.join(path.dirname(process.execPath), 'public') : null);

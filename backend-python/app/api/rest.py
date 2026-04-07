@@ -441,7 +441,7 @@ def claim_box_endpoint(box_id: str, req: ClaimRequest, background_tasks: Backgro
             "box_id": box_id, 
             "responsible_name": req.responsible_name
         })
-        return {"message": "Caixa assumida"}
+        return {"message": "Caixa assumida com sucesso!"}
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
@@ -454,7 +454,7 @@ def complete_box_endpoint(box_id: str, background_tasks: BackgroundTasks, token:
         background_tasks.add_task(packing_manager.broadcast, {"type": "box_completed", "box_id": box_id})
         if recalc_triggered:
             background_tasks.add_task(packing_manager.broadcast, {"type": "distribution_recalculated"})
-        return {"message": "Caixa concluída", "recalc_triggered": recalc_triggered}
+        return {"message": "Caixa concluída com sucesso!", "recalc_triggered": recalc_triggered}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -467,6 +467,6 @@ def cancel_box_endpoint(box_id: str, background_tasks: BackgroundTasks, token: s
         background_tasks.add_task(packing_manager.broadcast, {"type": "box_released", "box_id": box_id})
         if recalc_triggered:
             background_tasks.add_task(packing_manager.broadcast, {"type": "distribution_recalculated"})
-        return {"message": "Caixa liberada", "recalc_triggered": recalc_triggered}
+        return {"message": "Caixa liberada para outros voluntários.", "recalc_triggered": recalc_triggered}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
