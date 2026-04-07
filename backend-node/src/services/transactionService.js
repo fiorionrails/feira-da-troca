@@ -36,13 +36,16 @@ function processCredit(db, comandaId, amount, storeId = null, note = null) {
     throw new InvalidAmountError('Credit amount must be a positive integer.');
   }
 
-  const eventId = uuidv4();
-  const createdAt = nowIso();
-  db.prepare(
-    'INSERT INTO events (id, type, comanda_id, store_id, amount, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(eventId, EventType.credit, comandaId, storeId, amount, note, createdAt);
+  const doCredit = db.transaction(() => {
+    const eventId = uuidv4();
+    const createdAt = nowIso();
+    db.prepare(
+      'INSERT INTO events (id, type, comanda_id, store_id, amount, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(eventId, EventType.credit, comandaId, storeId, amount, note, createdAt);
+    return db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+  });
 
-  return db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+  return doCredit();
 }
 
 module.exports = { processDebit, processCredit, InsufficientBalanceError, InvalidAmountError };

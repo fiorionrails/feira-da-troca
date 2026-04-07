@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [storeList, setStoreList] = useState([])
   const [newStoreName, setNewStoreName] = useState('')
   const [copiedToken, setCopiedToken] = useState(null)
+  const [storeError, setStoreError] = useState('')
 
   const fetchStores = async () => {
       try {
@@ -55,25 +56,35 @@ export default function Dashboard() {
           })
           if (res.ok) {
               setNewStoreName('')
+              setStoreError('')
               fetchStores()
+          } else {
+              const data = await res.json()
+              setStoreError(data.detail || 'Erro ao criar loja.')
           }
       } catch (e) {
           console.error(e)
+          setStoreError('Sem conexão com o servidor.')
       }
   }
 
   const handleRevokeToken = async (storeId) => {
       if (!window.confirm("Isso desconectará a loja imediatamente e exigirá a inserção do novo token. Confirmar?")) return
-      
       try {
           const token = sessionStorage.getItem('ouroboros_token')
           const res = await fetch(`${BACKEND_HTTP}/api/stores/${storeId}/revoke_token`, {
               method: 'POST',
               headers: { 'token': token }
           })
-          if (res.ok) fetchStores()
+          if (res.ok) {
+              fetchStores()
+          } else {
+              const data = await res.json()
+              setStoreError(data.detail || 'Erro ao revogar token.')
+          }
       } catch (e) {
           console.error(e)
+          setStoreError('Sem conexão com o servidor.')
       }
   }
 
@@ -469,14 +480,15 @@ export default function Dashboard() {
                     <form onSubmit={handleCreateStore} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', background: 'rgba(16,185,129,0.05)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.2)' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }}>NOME DA NOVA LOJA</label>
-                            <input 
+                            <input
                                 type="text"
                                 className="input-premium"
                                 placeholder="Ex: Cantina do João, Sala do 3ºB..."
                                 value={newStoreName}
-                                onChange={e => setNewStoreName(e.target.value)}
+                                onChange={e => { setStoreError(''); setNewStoreName(e.target.value) }}
                                 required
                             />
+                            {storeError && <p style={{ marginTop: '6px', fontSize: '0.82rem', color: 'var(--danger)' }}>{storeError}</p>}
                         </div>
                         <button type="submit" className="btn btn-success" style={{ height: '48px' }}>
                             <Plus size={18}/> CADASTRAR 
