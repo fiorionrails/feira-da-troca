@@ -2,16 +2,24 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Store, TerminalSquare } from 'lucide-react'
 
+const STORE_TOKEN_REGEX = /^[A-Z0-9]{6}$/
+
 export default function Login() {
   const navigate = useNavigate()
   const [token, setToken] = useState('')
   const [role, setRole] = useState('store') // 'store' | 'admin'
+  const [error, setError] = useState('')
 
   const handleLogin = (e) => {
     e.preventDefault()
     if (!token.trim()) return
 
-    // Salvamos na sessão e roteamos para a tela correta (onde o WS vai tentar logar)
+    if (role === 'store' && !STORE_TOKEN_REGEX.test(token)) {
+      setError('Token de loja inválido. Deve ter exatamente 6 caracteres alfanuméricos (ex: XJ92KF).')
+      return
+    }
+
+    setError('')
     sessionStorage.setItem('ouroboros_token', token)
     if (role === 'admin') navigate('/admin')
     else navigate('/store')
@@ -65,10 +73,11 @@ export default function Login() {
             className="input-premium"
             placeholder={role === 'admin' ? 'Digite a senha do mestre...' : 'Ex: XJ92KF'}
             value={token}
-            onChange={(e) => setToken(role === 'admin' ? e.target.value : e.target.value.toUpperCase())}
+            onChange={(e) => { setError(''); setToken(role === 'admin' ? e.target.value : e.target.value.toUpperCase()) }}
             required
             autoFocus
           />
+          {error && <p style={{ marginTop: '8px', fontSize: '0.82rem', color: 'var(--danger)' }}>{error}</p>}
         </div>
 
         <button type="submit" className="btn btn-success" style={{ width: '100%', padding: '16px' }}>

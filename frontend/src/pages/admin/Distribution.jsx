@@ -371,12 +371,16 @@ const Distribution = () => {
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: currentTheme === 'dark' ? 'var(--text-muted)' : '#666' }}>Quantidade de Caixas Físicas Disponíveis</label>
-                <input 
+                <input
                   className="input-premium"
-                  type="number" 
+                  type="number"
+                  min="1"
                   placeholder="Ex: 15"
                   value={newDist.num_boxes}
-                  onChange={(e) => setNewDist({...newDist, num_boxes: parseInt(e.target.value)})}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10)
+                    if (val > 0) setNewDist({...newDist, num_boxes: val})
+                  }}
                 />
                 {suggestion && <p style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--lime-primary)' }}>Sugestão ideal: {suggestion.suggested} caixas.</p>}
               </div>
