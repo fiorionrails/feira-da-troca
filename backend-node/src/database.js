@@ -79,6 +79,15 @@ function getDb() {
                COUNT(CASE WHEN b.status = 'done' THEN 1 END) as boxes_done
         FROM stores s LEFT JOIN boxes b ON b.assigned_store_id = s.id
         GROUP BY s.id;
+
+      -- Índices para queries críticas de performance
+      CREATE INDEX IF NOT EXISTS idx_events_comanda_id ON events(comanda_id);
+      CREATE INDEX IF NOT EXISTS idx_events_store_id ON events(store_id);
+      CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_boxes_distribution_id ON boxes(distribution_id);
+      CREATE INDEX IF NOT EXISTS idx_boxes_status ON boxes(status);
+      CREATE INDEX IF NOT EXISTS idx_box_items_box_id ON box_items(box_id);
+      CREATE INDEX IF NOT EXISTS idx_box_items_category_id ON box_items(category_id);
     `);
   }
   return _db;

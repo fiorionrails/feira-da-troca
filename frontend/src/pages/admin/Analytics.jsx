@@ -74,6 +74,7 @@ export default function Analytics() {
   const [liveFeed, setLiveFeed] = useState([])
   const [flash, setFlash] = useState(null)
   const wsRef = useRef(null)
+  const wsReconnectRef = useRef(null)
   const prevKpis = useRef(null)
 
   // Polling a cada 3s — sem reload, só setState
@@ -117,11 +118,14 @@ export default function Analytics() {
         }
       }
       wsRef.current.onclose = (e) => {
-        if (e.code !== 1008) setTimeout(connect, 3000)
+        if (e.code !== 1008) wsReconnectRef.current = setTimeout(connect, 3000)
       }
     }
     connect()
-    return () => { if (wsRef.current) wsRef.current.close() }
+    return () => {
+      if (wsReconnectRef.current) clearTimeout(wsReconnectRef.current)
+      if (wsRef.current) wsRef.current.close()
+    }
   }, [])
 
   if (!data) {

@@ -100,9 +100,13 @@ const Packing = () => {
         setIsModalOpen(false);
         setSelectedBox(null);
         fetchData();
+      } else {
+        const err = await res.json();
+        message.error(err.detail || 'Erro ao concluir caixa.');
       }
     } catch (err) {
       console.error(err);
+      message.error('Sem conexão com o servidor.');
     }
   };
 
@@ -117,9 +121,13 @@ const Packing = () => {
         setIsModalOpen(false);
         setSelectedBox(null);
         fetchData();
+      } else {
+        const err = await res.json();
+        message.error(err.detail || 'Erro ao liberar caixa.');
       }
     } catch (err) {
       console.error(err);
+      message.error('Sem conexão com o servidor.');
     }
   };
 

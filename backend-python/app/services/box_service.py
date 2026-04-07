@@ -130,4 +130,4 @@ def recalculate_pending_boxes(conn, distribution_id: str):
                 'INSERT INTO box_items (id, box_id, category_id, target_quantity) VALUES (?, ?, ?, ?)',
                 (str(uuid4()), real_box_id, cat_id, qty)
             )
-    conn.commit()
+    # Não faz commit aqui — o caller (complete_box/cancel_box) é responsável pelo commit único
