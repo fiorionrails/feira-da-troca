@@ -30,14 +30,15 @@ def complete_box(box_id: str):
             raise ValueError("Caixa não encontrada.")
 
         conn.execute("""
-            UPDATE boxes 
-            SET status = 'done', completed_at = ? 
+            UPDATE boxes
+            SET status = 'done', completed_at = ?
             WHERE id = ?
         """, (datetime.now().isoformat(), box_id))
-        conn.commit()
 
-        # Verifica recálculo
-        return check_and_trigger_recalc(conn, box['distribution_id'])
+        # Não comita antes — mantém tudo na mesma transação para evitar race condition
+        recalc = check_and_trigger_recalc(conn, box['distribution_id'])
+        conn.commit()
+        return recalc
 
 def cancel_box(box_id: str):
     with get_db_connection() as conn:
@@ -46,14 +47,15 @@ def cancel_box(box_id: str):
             raise ValueError("Caixa não encontrada.")
 
         conn.execute("""
-            UPDATE boxes 
-            SET responsible_name = NULL, status = 'pending', claimed_at = NULL 
+            UPDATE boxes
+            SET responsible_name = NULL, status = 'pending', claimed_at = NULL
             WHERE id = ?
         """, (box_id,))
-        conn.commit()
 
-        # Verifica recálculo
-        return check_and_trigger_recalc(conn, box['distribution_id'])
+        # Não comita antes — mantém tudo na mesma transação para evitar race condition
+        recalc = check_and_trigger_recalc(conn, box['distribution_id'])
+        conn.commit()
+        return recalc
 
 def flag_needs_recalc(distribution_id: str):
     with get_db_connection() as conn:
@@ -61,17 +63,20 @@ def flag_needs_recalc(distribution_id: str):
         conn.commit()
 
 def check_and_trigger_recalc(conn, distribution_id: str):
+    """
+    Verifica se pode rodar o recálculo e o executa se necessário.
+    Deve ser chamado dentro de uma transação aberta pelo chamador — não faz commit aqui.
+    """
     in_progress = conn.execute(
-        'SELECT COUNT(*) as c FROM boxes WHERE distribution_id = ? AND status = ?', 
+        'SELECT COUNT(*) as c FROM boxes WHERE distribution_id = ? AND status = ?',
         (distribution_id, 'in_progress')
     ).fetchone()['c']
-    
+
     if in_progress == 0:
         dist = conn.execute('SELECT needs_recalc FROM distributions WHERE id = ?', (distribution_id,)).fetchone()
         if dist and dist['needs_recalc'] == 1:
             recalculate_pending_boxes(conn, distribution_id)
             conn.execute('UPDATE distributions SET needs_recalc = 0 WHERE id = ?', (distribution_id,))
-            conn.commit()
             return True
     return False
 

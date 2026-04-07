@@ -3,7 +3,7 @@ const log = require('../logger');
 const { getStoreByToken } = require('../services/storeService');
 const { getComandaByCode, getBalance } = require('../services/comandaService');
 const { processDebit, InsufficientBalanceError, InvalidAmountError } = require('../services/transactionService');
-const { broadcastToAdmins } = require('./wsAdmin');
+const { broadcastToAdmins } = require('./wsRegistry');
 const { parsePositiveInt } = require('../utils');
 
 const MAX_STORE_CONNECTIONS = parseInt(process.env.MAX_STORE_CONNECTIONS || '100', 10);

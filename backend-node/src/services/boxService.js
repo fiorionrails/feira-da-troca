@@ -69,22 +69,28 @@ function flagNeedsRecalc(distributionId) {
 }
 
 /**
- * Verifica se pode rodar o recálculo e o executa se necessário
+ * Verifica se pode rodar o recálculo e o executa se necessário.
+ * Envolto em transação para evitar race condition quando múltiplas caixas
+ * são concluídas simultaneamente — garante que o recálculo ocorre apenas uma vez.
  */
 function checkAndTriggerRecalc(distributionId) {
   const db = getDb();
-  
-  const inProgress = db.prepare('SELECT COUNT(*) as c FROM boxes WHERE distribution_id = ? AND status = ?').get(distributionId, 'in_progress').c;
-  
-  if (inProgress === 0) {
-    const dist = db.prepare('SELECT needs_recalc FROM distributions WHERE id = ?').get(distributionId);
-    if (dist && dist.needs_recalc === 1) {
-      recalculatePendingBoxes(distributionId);
-      db.prepare('UPDATE distributions SET needs_recalc = 0 WHERE id = ?').run(distributionId);
-      return true; // Recalculado
+
+  const run = db.transaction(() => {
+    const inProgress = db.prepare('SELECT COUNT(*) as c FROM boxes WHERE distribution_id = ? AND status = ?').get(distributionId, 'in_progress').c;
+
+    if (inProgress === 0) {
+      const dist = db.prepare('SELECT needs_recalc FROM distributions WHERE id = ?').get(distributionId);
+      if (dist && dist.needs_recalc === 1) {
+        recalculatePendingBoxes(distributionId);
+        db.prepare('UPDATE distributions SET needs_recalc = 0 WHERE id = ?').run(distributionId);
+        return true;
+      }
     }
-  }
-  return false;
+    return false;
+  });
+
+  return run();
 }
 
 /**

@@ -176,8 +176,16 @@ Always derive balance from `balance_view` — never store balance as a column. T
 ```
 ADMIN_TOKEN=<strong-secret-token>
 DATABASE_URL=ouroboros.db
-PORT=8000
+PORT=8000                          # Node.js only — Python usa --port via CLI
 EVENT_NAME=Feira da Troca 2024
+MAX_COMANDAS=1000                  # Opcional — limite de comandas (padrão: 1000)
+```
+
+### Variáveis de ambiente opcionais (apenas Node.js):
+```
+MAX_STORE_CONNECTIONS=100          # Limite de conexões WebSocket simultâneas de loja
+STRESS_NO_RATELIMIT=true           # Desativa rate limiting de WS (apenas testes de carga)
+FRONTEND_DIST=./public             # Caminho do build do frontend (modo launcher/pkg)
 ```
 
 ### Frontend config.js:
