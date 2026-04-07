@@ -220,6 +220,9 @@ async def websocket_admin(websocket: WebSocket, token: str):
                 except Exception as err:
                     await websocket.send_json({"type": "error", "reason": str(err)})
 
+            else:
+                await websocket.send_json({"type": "error", "reason": "unknown_message_type"})
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:

@@ -190,6 +190,9 @@ function handleAdminConnection(ws, token) {
       } catch (err) {
         ws.send(JSON.stringify({ type: 'error', reason: err.message }));
       }
+
+    } else {
+      ws.send(JSON.stringify({ type: 'error', reason: 'unknown_message_type' }));
     }
   });
 
