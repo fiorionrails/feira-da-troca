@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import uuid
 import secrets
 from datetime import datetime, timezone
@@ -230,6 +230,13 @@ def get_analytics():
 class DistributionCreate(BaseModel):
     name: str
     num_boxes: int
+
+    @field_validator('num_boxes')
+    @classmethod
+    def validate_num_boxes(cls, v):
+        if v <= 0:
+            raise ValueError('num_boxes must be a positive integer')
+        return v
 
 @router.get("/distribution")
 def list_distributions(token: str = Depends(verify_admin)):

@@ -183,6 +183,7 @@ router.get('/distribution', adminAuth, (req, res) => {
 router.post('/distribution', adminAuth, (req, res) => {
   const { name, num_boxes } = req.body;
   if (!name || !num_boxes) return res.status(400).json({ detail: 'name and num_boxes are required' });
+  if (!Number.isInteger(num_boxes) || num_boxes <= 0) return res.status(400).json({ detail: 'num_boxes must be a positive integer' });
   
   const db = getDb();
   const id = uuidv4();

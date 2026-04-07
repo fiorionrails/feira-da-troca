@@ -8,6 +8,12 @@ import Analytics from './pages/admin/Analytics'
 import Distribution from './pages/admin/Distribution'
 import Packing from './pages/packing/Packing'
 
+function ProtectedRoute({ children }) {
+  const token = sessionStorage.getItem('ouroboros_token')
+  if (!token) return <Navigate to="/" replace />
+  return children
+}
+
 function App() {
   return (
     <ThemeProvider>
@@ -16,14 +22,14 @@ function App() {
           <Route path="/" element={<Login />} />
 
           {/* Lojas rotas */}
-          <Route path="/store" element={<StoreTerminal />} />
+          <Route path="/store" element={<ProtectedRoute><StoreTerminal /></ProtectedRoute>} />
 
           {/* Painel Administrativo / Banco */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/distribution" element={<Distribution />} />
+          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/distribution" element={<ProtectedRoute><Distribution /></ProtectedRoute>} />
 
           {/* Montagem de Caixas (Voluntários) */}
-          <Route path="/packing" element={<Packing />} />
+          <Route path="/packing" element={<ProtectedRoute><Packing /></ProtectedRoute>} />
 
           {/* Dashboard Analítico (público — telão) */}
           <Route path="/analytics" element={<Analytics />} />
