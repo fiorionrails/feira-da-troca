@@ -12,6 +12,7 @@ export function useAdminWebSocket() {
   const [lastCategoryUpdate, setLastCategoryUpdate] = useState(0)
 
   const ws = useRef(null)
+  const reconnectRef = useRef(null)
 
   useEffect(() => {
     let isMounted = true
@@ -66,7 +67,7 @@ export function useAdminWebSocket() {
           setWsError('Token de administrador inválido.')
           navigate('/')
         } else {
-          setTimeout(connect, 3000)
+          reconnectRef.current = setTimeout(connect, 3000)
         }
       }
     }
@@ -75,6 +76,7 @@ export function useAdminWebSocket() {
 
     return () => {
       isMounted = false
+      if (reconnectRef.current) clearTimeout(reconnectRef.current)
       if (ws.current) ws.current.close()
     }
   }, [navigate])

@@ -11,6 +11,7 @@ export function useStoreWebSocket() {
   const [wsError, setWsError] = useState(null)
 
   const ws = useRef(null)
+  const reconnectRef = useRef(null)
 
   useEffect(() => {
     let isMounted = true
@@ -70,7 +71,7 @@ export function useStoreWebSocket() {
           setWsError('Token da loja inválido.')
           navigate('/')
         } else {
-          setTimeout(connectStore, 2000)
+          reconnectRef.current = setTimeout(connectStore, 2000)
         }
       }
     }
@@ -79,6 +80,7 @@ export function useStoreWebSocket() {
 
     return () => {
       isMounted = false
+      if (reconnectRef.current) clearTimeout(reconnectRef.current)
       if (ws.current) ws.current.close()
     }
   }, [navigate])

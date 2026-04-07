@@ -160,9 +160,18 @@ O painel estará em `http://localhost:5173`.
 Para produção (servido pelo próprio backend):
 
 ```bash
+# 1. Configure o IP do servidor na LAN
+cp .env.example .env
+# Edite .env e substitua 192.168.1.10 pelo IP real da máquina servidora
+
+# 2. Build de produção (lê as variáveis do .env automaticamente)
 npm run build
-# O build vai pra ../backend-node/static/ ou ../backend-python/static/
+# O build vai para dist/ — copie para backend-node/public/ ou backend-python/public/
 ```
+
+!!! warning "Não pule a configuração do IP"
+    Se fizer `npm run build` sem configurar o `.env`, o frontend irá apontar para `localhost:8000`.
+    Isso funciona apenas na máquina servidora — todos os outros terminais na LAN não conseguirão conectar.
 
 ---
 
