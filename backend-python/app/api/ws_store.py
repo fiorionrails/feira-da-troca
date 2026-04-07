@@ -206,6 +206,9 @@ async def websocket_store(websocket: WebSocket, token: str):
                         "balance": balance
                     })
 
+            else:
+                await websocket.send_json({"type": "error", "reason": "unknown_message_type"})
+
     except WebSocketDisconnect:
         store_manager.disconnect(websocket)
     except Exception as e:

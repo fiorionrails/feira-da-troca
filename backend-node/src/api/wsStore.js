@@ -179,6 +179,9 @@ function handleStoreConnection(ws, token) {
         holder_name: comanda.holder_name,
         balance,
       }));
+
+    } else {
+      ws.send(JSON.stringify({ type: 'error', reason: 'unknown_message_type' }));
     }
   });
 
