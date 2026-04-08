@@ -1,5 +1,6 @@
 .env
 node_modules
+launcher/
 .vscode
 .idea
 .DS_Store

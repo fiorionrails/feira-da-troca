@@ -231,6 +231,13 @@ class DistributionCreate(BaseModel):
     name: str
     num_boxes: int
 
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('name cannot be empty')
+        return v
+
     @field_validator('num_boxes')
     @classmethod
     def validate_num_boxes(cls, v):
@@ -245,7 +252,7 @@ def list_distributions(token: str = Depends(verify_admin)):
         cursor.execute("SELECT * FROM distributions ORDER BY created_at DESC")
         return [dict(r) for r in cursor.fetchall()]
 
-@router.post("/distribution")
+@router.post("/distribution", status_code=201)
 def create_distribution(dist: DistributionCreate, token: str = Depends(verify_admin)):
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -313,7 +320,7 @@ def calculate_distribution_endpoint(dist_id: str, token: str = Depends(verify_ad
         stores = [dict(r) for r in cursor.fetchall()]
         
         if not stores:
-            raise HTTPException(status_code=400, detail="Nenhuma loja cadastrada.")
+            raise HTTPException(status_code=400, detail="Nenhuma loja cadastrada para receber caixas.")
 
         try:
             result = distribute_items(categories, dist["num_boxes"], stores)
@@ -340,7 +347,7 @@ def calculate_distribution_endpoint(dist_id: str, token: str = Depends(verify_ad
                     )
             
             conn.commit()
-            return {"message": "Distribuição calculada", "warnings": result["warnings"]}
+            return {"message": "Distribuição calculada com sucesso", "warnings": result["warnings"]}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -405,7 +412,7 @@ def get_active_packing(token: str = Depends(verify_admin)):
         cursor.execute("SELECT * FROM distributions WHERE status = 'active'")
         dist = cursor.fetchone()
         if not dist:
-            raise HTTPException(status_code=404, detail="Nenhuma distribuição ativa.")
+            raise HTTPException(status_code=404, detail="Nenhuma distribuição ativa no momento.")
 
         cursor.execute("""
             SELECT b.*, s.name as store_name
