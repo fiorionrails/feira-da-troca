@@ -52,10 +52,6 @@ def distribute_items(categories: List[Dict[str, Any]], num_boxes: int, stores: L
 def suggest_box_count(categories: List[Dict[str, Any]], stores_count: int):
     ITEMS_PER_BOX_IDEAL = 15
     total_items = sum(c.get('total_entries', 0) for c in categories)
-    
-    if total_items == 0:
-        return {"suggested": stores_count, "reasoning": "Sem itens no inventário."}
-        
     by_capacity = math.ceil(total_items / ITEMS_PER_BOX_IDEAL)
     suggestion = max(stores_count, by_capacity)
 

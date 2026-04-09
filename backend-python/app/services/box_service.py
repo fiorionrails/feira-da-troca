@@ -14,12 +14,10 @@ def claim_box(box_id: str, responsible_name: str):
         conn.commit()
 
         if result.rowcount == 0:
-            box = conn.execute('SELECT responsible_name, box_number, status FROM boxes WHERE id = ?', (box_id,)).fetchone()
+            box = conn.execute('SELECT responsible_name, box_number FROM boxes WHERE id = ?', (box_id,)).fetchone()
             if not box:
                 raise ValueError("Caixa não encontrada.")
-            if box['responsible_name']:
-                raise ValueError(f"Caixa #{box['box_number']} já foi assumida por {box['responsible_name']}.")
-            raise ValueError(f"Caixa #{box['box_number']} não está disponível para ser assumida (status: {box['status']}).")
+            raise ValueError(f"Caixa #{box['box_number']} já foi assumida por {box['responsible_name']}.")
 
     return True
 
@@ -57,10 +55,17 @@ def cancel_box(box_id: str):
         conn.commit()
         return recalc
 
-def flag_needs_recalc(distribution_id: str):
-    with get_db_connection() as conn:
+def flag_needs_recalc(distribution_id: str, conn=None):
+    """Marks a distribution as needing recalculation.
+    If conn is provided, uses it (same-connection update, no commit — caller is responsible).
+    Otherwise opens its own connection and commits.
+    """
+    if conn is not None:
         conn.execute('UPDATE distributions SET needs_recalc = 1 WHERE id = ?', (distribution_id,))
-        conn.commit()
+    else:
+        with get_db_connection() as own_conn:
+            own_conn.execute('UPDATE distributions SET needs_recalc = 1 WHERE id = ?', (distribution_id,))
+            own_conn.commit()
 
 def check_and_trigger_recalc(conn, distribution_id: str):
     """

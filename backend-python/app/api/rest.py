@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks, Request
 from pydantic import BaseModel, field_validator
+from typing import Optional
 import uuid
 import secrets
 from datetime import datetime, timezone
@@ -8,8 +9,9 @@ from app.config import settings
 
 router = APIRouter(prefix="/api")
 
-def verify_admin(token: str = Header(None)):
-    if token != settings.admin_token:
+def verify_admin(request: Request):
+    token = request.headers.get('token') or request.query_params.get('token')
+    if not token or token != settings.admin_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return token
 
@@ -69,29 +71,31 @@ def get_categories(token: str = Header(None)):
         return [dict(row) for row in cursor.fetchall()]
 
 class CategoryCreate(BaseModel):
-    name: str
-    price: int
+    name: Optional[str] = None
+    price: Optional[int] = None
 
 @router.post("/categories", status_code=201)
 def create_category(category: CategoryCreate, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
-    if not category.name or not category.name.strip():
+    name = category.name.strip() if category.name else ''
+    if not name:
         raise HTTPException(status_code=400, detail="name is required")
-    if not isinstance(category.price, int) or category.price <= 0:
+    price = category.price
+    if price is None or not isinstance(price, int) or isinstance(price, bool) or price <= 0:
         raise HTTPException(status_code=400, detail="price must be a positive integer")
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (category.name,))
+        cursor.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (name,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Categoria já existe")
             
         new_id = str(uuid.uuid4())
         cursor.execute(
             "INSERT INTO categories (id, name, price) VALUES (?, ?, ?)",
-            (new_id, category.name, category.price)
+            (new_id, name, price)
         )
         conn.commit()
         
-        new_cat = {"id": new_id, "name": category.name, "price": category.price, "total_entries": 0, "total_exits": 0}
+        new_cat = {"id": new_id, "name": name, "price": price, "total_entries": 0, "total_exits": 0}
         
         from app.api.ws_admin import manager
         background_tasks.add_task(manager.broadcast, {"type": "category_updated", "category": new_cat})
@@ -99,10 +103,10 @@ def create_category(category: CategoryCreate, background_tasks: BackgroundTasks,
         return new_cat
 
 class StoreCreate(BaseModel):
-    name: str
+    name: Optional[str] = None
 
 class StoreUpdate(BaseModel):
-    name: str
+    name: Optional[str] = None
 
 @router.post("/stores", status_code=201)
 def create_store(store: StoreCreate, token: str = Depends(verify_admin)):
@@ -348,7 +352,7 @@ def calculate_distribution_endpoint(dist_id: str, token: str = Depends(verify_ad
             
             conn.commit()
             return {"message": "Distribuição calculada com sucesso", "warnings": result["warnings"]}
-        except ValueError as e:
+        except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/distribution/{dist_id}/activate")
@@ -409,7 +413,7 @@ def delete_distribution(dist_id: str, token: str = Depends(verify_admin)):
 def get_active_packing(token: str = Depends(verify_admin)):
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM distributions WHERE status = 'active'")
+        cursor.execute("SELECT * FROM distributions WHERE status = 'active' ORDER BY created_at DESC")
         dist = cursor.fetchone()
         if not dist:
             raise HTTPException(status_code=404, detail="Nenhuma distribuição ativa no momento.")

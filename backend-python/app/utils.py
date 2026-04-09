@@ -5,8 +5,11 @@ from typing import Optional
 
 
 def now_iso() -> str:
-    """Returns the current UTC timestamp as an ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    """Returns the current UTC timestamp as an ISO 8601 string ending in Z (UTC).
+    Matches Node.js new Date().toISOString() format: millisecond precision, Z suffix.
+    """
+    now = datetime.now(timezone.utc)
+    return now.strftime('%Y-%m-%dT%H:%M:%S.') + f"{now.microsecond // 1000:03d}Z"
 
 
 def parse_positive_int(value) -> Optional[int]:

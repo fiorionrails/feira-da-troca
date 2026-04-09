@@ -11,6 +11,7 @@ from app.services.comanda_service import create_comanda, get_next_code, get_coma
 from app.services.transaction_service import process_credit
 from app.services.product_service import create_or_update_category
 from app.utils import parse_positive_int, parse_non_negative_int
+import app.logger as log
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
@@ -49,7 +50,7 @@ def _maybe_flag_recalc(conn):
     from app.services.box_service import flag_needs_recalc
     row = conn.execute("SELECT id FROM distributions WHERE status = 'active'").fetchone()
     if row:
-        flag_needs_recalc(row["id"])
+        flag_needs_recalc(row["id"], conn)
 
 @router.websocket("/ws/admin")
 async def websocket_admin(websocket: WebSocket, token: str):
@@ -129,6 +130,8 @@ async def websocket_admin(websocket: WebSocket, token: str):
 
                         next_code = get_next_code(conn)
 
+                    log.comanda_criada(comanda.code, comanda.holder_name, initial_balance)
+
                     await manager.broadcast({
                         "type": "comanda_created",
                         "code": comanda.code,
@@ -179,6 +182,8 @@ async def websocket_admin(websocket: WebSocket, token: str):
                             _maybe_flag_recalc(conn)
 
                         new_balance = get_balance(conn, comanda.id)
+
+                    log.credito_confirmado(comanda_code, comanda.holder_name, amount, new_balance)
 
                     await manager.broadcast({
                         "type": "credit_confirmed",
