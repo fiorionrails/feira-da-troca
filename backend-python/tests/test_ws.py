@@ -241,10 +241,6 @@ class TestAdminWSRegisterCategory:
 # ============================================================================
 class TestAdminWSMalformed:
     def test_invalid_json_is_silently_ignored(self, client):
-        import threading
-        import time
-        result = []
-
         with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as ws:
             ws.receive_json()  # greeting
             ws.send_text("{ this is not json }")
