@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+from contextlib import asynccontextmanager
 from app.api.ws_admin import router as admin_ws_router
 from app.api.ws_store import router as store_ws_router
 from app.api.ws_packing import router as packing_ws_router
@@ -76,10 +77,22 @@ class RestLogMiddleware(BaseHTTPMiddleware):
         log.rest(request.method, request.url.path, response.status_code, ms)
         return response
 
+@asynccontextmanager
+async def lifespan(app):
+    log.banner({
+        "port": 8000,
+        "database_url": settings.database_url,
+        "admin_token": settings.admin_token,
+        "max_comandas": settings.max_comandas,
+        "event_name": settings.event_name,
+    })
+    yield
+
 app = FastAPI(
     title=settings.event_name,
     description="Backend de Sincronização e Ledger do Ouroboros (Local-First)",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Na rede local, o CORS pode ser mais permissivo, pois é um ambiente controlado sem exposição externa.
@@ -106,13 +119,3 @@ def read_root():
         "mode": "local-first",
         "event": settings.event_name
     }
-
-@app.on_event("startup")
-async def on_startup():
-    log.banner({
-        "port": 8000,
-        "database_url": settings.database_url,
-        "admin_token": settings.admin_token,
-        "max_comandas": settings.max_comandas,
-        "event_name": settings.event_name,
-    })

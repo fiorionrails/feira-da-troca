@@ -98,4 +98,4 @@ if (require.main === module) {
   server.listen(config.port, '0.0.0.0', () => log.banner(config));
 }
 
-module.exports = { app, server };
+module.exports = { app, server, wss };
