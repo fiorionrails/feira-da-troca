@@ -79,6 +79,16 @@ class RestLogMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app):
+    # Clear WS manager connection pools on every startup.
+    # Critical for test isolation: Starlette TestClient creates a new app instance per
+    # test, but module-level WS manager singletons persist across instances. Stale
+    # half-closed connections cause broadcast() to hang waiting for TCP acknowledgment.
+    from app.api.ws_admin import manager as admin_manager
+    from app.api.ws_store import store_manager
+    from app.api.ws_packing import manager as packing_manager
+    admin_manager.active_connections.clear()
+    store_manager.active_connections.clear()
+    packing_manager.active_connections.clear()
     log.banner({
         "port": 8000,
         "database_url": settings.database_url,

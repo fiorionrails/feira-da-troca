@@ -497,3 +497,442 @@ describe('Body size limit', () => {
     assert.strictEqual(res.status, 413);
   });
 });
+
+// ============================================================================
+// Distribution seed helpers
+// ============================================================================
+function seedDistribution(db, id = 'dist-1', name = 'Rodada 1', numBoxes = 2, status = 'planning') {
+  db.prepare(
+    'INSERT INTO distributions (id, name, num_boxes, status, needs_recalc, created_at) VALUES (?,?,?,?,?,?)'
+  ).run(id, name, numBoxes, status, 0, new Date().toISOString());
+  return id;
+}
+
+function seedBox(db, id, distributionId, boxNumber, storeId, status = 'pending', responsibleName = null) {
+  db.prepare(
+    'INSERT INTO boxes (id, distribution_id, box_number, assigned_store_id, status, responsible_name) VALUES (?,?,?,?,?,?)'
+  ).run(id, distributionId, boxNumber, storeId, status, responsibleName);
+  return id;
+}
+
+function seedCategoryWithEntries(db, id, name, price, entries) {
+  db.prepare('INSERT INTO categories (id, name, price, total_entries) VALUES (?,?,?,?)').run(id, name, price, entries);
+  return id;
+}
+
+// ============================================================================
+// GET /api/distribution
+// ============================================================================
+describe('GET /api/distribution — empty', () => {
+  useDb();
+
+  test('returns 401 without token', async () => {
+    const res = await fetch(`${BASE}/api/distribution`);
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns empty array when no distributions exist', async () => {
+    const res = await req('GET', '/api/distribution', undefined, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(Array.isArray(body));
+    assert.strictEqual(body.length, 0);
+  });
+});
+
+describe('GET /api/distribution — with data', () => {
+  useDb((db) => {
+    seedDistribution(db, 'dist-1', 'Rodada 1', 2, 'planning');
+    seedDistribution(db, 'dist-2', 'Rodada 2', 3, 'active');
+  });
+
+  test('returns all distributions', async () => {
+    const body = await (await req('GET', '/api/distribution', undefined, adminHeaders())).json();
+    assert.strictEqual(body.length, 2);
+  });
+
+  test('each distribution has required fields', async () => {
+    const body = await (await req('GET', '/api/distribution', undefined, adminHeaders())).json();
+    for (const d of body) {
+      assert.ok(d.id);
+      assert.ok(d.name);
+      assert.ok(typeof d.num_boxes === 'number');
+      assert.ok(d.status);
+      assert.ok(d.created_at);
+    }
+  });
+});
+
+// ============================================================================
+// POST /api/distribution
+// ============================================================================
+describe('POST /api/distribution', () => {
+  useDb();
+
+  test('returns 401 without token', async () => {
+    const res = await req('POST', '/api/distribution', { name: 'Rodada 1', num_boxes: 2 });
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 400 when name is missing', async () => {
+    const res = await req('POST', '/api/distribution', { num_boxes: 2 }, adminHeaders());
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual((await res.json()).detail, 'name and num_boxes are required');
+  });
+
+  test('returns 400 when num_boxes is missing', async () => {
+    const res = await req('POST', '/api/distribution', { name: 'Rodada 1' }, adminHeaders());
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual((await res.json()).detail, 'name and num_boxes are required');
+  });
+
+  test('returns 400 when num_boxes is 0', async () => {
+    const res = await req('POST', '/api/distribution', { name: 'Rodada 1', num_boxes: 0 }, adminHeaders());
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual((await res.json()).detail, 'name and num_boxes are required');
+  });
+
+  test('returns 400 when num_boxes is negative', async () => {
+    const res = await req('POST', '/api/distribution', { name: 'Rodada 1', num_boxes: -1 }, adminHeaders());
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual((await res.json()).detail, 'num_boxes must be a positive integer');
+  });
+
+  test('returns 400 when num_boxes is a float', async () => {
+    const res = await req('POST', '/api/distribution', { name: 'Rodada 1', num_boxes: 1.5 }, adminHeaders());
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual((await res.json()).detail, 'num_boxes must be a positive integer');
+  });
+
+  test('returns 201 with correct shape on success', async () => {
+    const res = await req('POST', '/api/distribution', { name: 'Rodada 1', num_boxes: 2 }, adminHeaders());
+    assert.strictEqual(res.status, 201);
+    const body = await res.json();
+    assert.ok(body.id);
+    assert.strictEqual(body.name, 'Rodada 1');
+    assert.strictEqual(body.num_boxes, 2);
+    assert.strictEqual(body.status, 'planning');
+  });
+
+  test('created distribution appears in GET /api/distribution', async () => {
+    await req('POST', '/api/distribution', { name: 'Nova Rodada', num_boxes: 3 }, adminHeaders());
+    const list = await (await req('GET', '/api/distribution', undefined, adminHeaders())).json();
+    assert.ok(list.some((d) => d.name === 'Nova Rodada'));
+  });
+});
+
+// ============================================================================
+// GET /api/distribution/suggest
+// ============================================================================
+describe('GET /api/distribution/suggest', () => {
+  useDb((db) => {
+    seedCategoryWithEntries(db, 'cat-1', 'Jaqueta', 1500, 10);
+    seedStore(db, 'store-1', 'Loja 1', 'STRTK1');
+  });
+
+  test('returns 401 without token', async () => {
+    const res = await fetch(`${BASE}/api/distribution/suggest`);
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 200 with suggested and reasoning fields', async () => {
+    const res = await req('GET', '/api/distribution/suggest', undefined, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(typeof body.suggested === 'number');
+    assert.ok(typeof body.reasoning === 'string');
+  });
+});
+
+// ============================================================================
+// GET /api/distribution/:id
+// ============================================================================
+describe('GET /api/distribution/:id', () => {
+  useDb((db) => {
+    seedDistribution(db, 'dist-detail', 'Rodada Detalhe', 2, 'planning');
+  });
+
+  test('returns 401 without token', async () => {
+    const res = await fetch(`${BASE}/api/distribution/dist-detail`);
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 404 for unknown distribution id', async () => {
+    const res = await req('GET', '/api/distribution/nonexistent', undefined, adminHeaders());
+    assert.strictEqual(res.status, 404);
+    assert.strictEqual((await res.json()).detail, 'Distribution not found');
+  });
+
+  test('returns 200 with distribution and boxes array', async () => {
+    const res = await req('GET', '/api/distribution/dist-detail', undefined, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(body.distribution);
+    assert.strictEqual(body.distribution.id, 'dist-detail');
+    assert.ok(Array.isArray(body.boxes));
+  });
+});
+
+// ============================================================================
+// POST /api/distribution/:id/calculate
+// ============================================================================
+describe('POST /api/distribution/:id/calculate', () => {
+  useDb((db) => {
+    seedStore(db, 'store-1', 'Loja 1', 'STRTK1');
+    seedCategoryWithEntries(db, 'cat-1', 'Jaqueta', 1500, 10);
+    seedDistribution(db, 'dist-calc', 'Para Calcular', 2, 'planning');
+  });
+
+  test('returns 401 without token', async () => {
+    const res = await req('POST', '/api/distribution/dist-calc/calculate', {});
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 404 for unknown distribution id', async () => {
+    const res = await req('POST', '/api/distribution/nonexistent/calculate', {}, adminHeaders());
+    assert.strictEqual(res.status, 404);
+  });
+
+  test('returns 200 with message and warnings array on success', async () => {
+    const res = await req('POST', '/api/distribution/dist-calc/calculate', {}, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(typeof body.message === 'string');
+    assert.ok(Array.isArray(body.warnings));
+  });
+
+  test('boxes are created in DB after calculate', async () => {
+    await req('POST', '/api/distribution/dist-calc/calculate', {}, adminHeaders());
+    const detail = await (await req('GET', '/api/distribution/dist-calc', undefined, adminHeaders())).json();
+    assert.strictEqual(detail.boxes.length, 2);
+  });
+});
+
+describe('POST /api/distribution/:id/calculate — no stores', () => {
+  useDb((db) => {
+    seedCategoryWithEntries(db, 'cat-1', 'Jaqueta', 1500, 10);
+    seedDistribution(db, 'dist-no-stores', 'Sem Lojas', 2, 'planning');
+  });
+
+  test('returns 400 when no stores are registered', async () => {
+    const res = await req('POST', '/api/distribution/dist-no-stores/calculate', {}, adminHeaders());
+    assert.strictEqual(res.status, 400);
+    assert.ok((await res.json()).detail);
+  });
+});
+
+// ============================================================================
+// DELETE /api/distribution/:id
+// ============================================================================
+describe('DELETE /api/distribution/:id', () => {
+  useDb((db) => {
+    seedDistribution(db, 'dist-del', 'Para Excluir', 2, 'planning');
+  });
+
+  test('returns 401 without token', async () => {
+    const res = await req('DELETE', '/api/distribution/dist-del');
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 404 for unknown distribution', async () => {
+    const res = await req('DELETE', '/api/distribution/nonexistent', undefined, adminHeaders());
+    assert.strictEqual(res.status, 404);
+  });
+
+  test('returns 200 and distribution is gone afterwards', async () => {
+    const res = await req('DELETE', '/api/distribution/dist-del', undefined, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    assert.ok((await res.json()).message);
+    const check = await req('GET', '/api/distribution/dist-del', undefined, adminHeaders());
+    assert.strictEqual(check.status, 404);
+  });
+});
+
+describe('DELETE /api/distribution/:id — active with in_progress boxes', () => {
+  useDb((db) => {
+    seedStore(db, 'store-1', 'Loja 1', 'STRTK1');
+    seedDistribution(db, 'dist-active', 'Rodada Ativa', 1, 'active');
+    seedBox(db, 'box-ip', 'dist-active', 1, 'store-1', 'in_progress', 'João');
+  });
+
+  test('returns 409 when active distribution has in_progress boxes', async () => {
+    const res = await req('DELETE', '/api/distribution/dist-active', undefined, adminHeaders());
+    assert.strictEqual(res.status, 409);
+    assert.ok((await res.json()).detail);
+  });
+});
+
+// ============================================================================
+// PUT /api/distribution/:id/activate
+// ============================================================================
+describe('PUT /api/distribution/:id/activate', () => {
+  useDb((db) => {
+    seedDistribution(db, 'dist-act', 'Para Ativar', 2, 'planning');
+  });
+
+  test('returns 401 without token', async () => {
+    const res = await req('PUT', '/api/distribution/dist-act/activate', {});
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 404 for unknown distribution', async () => {
+    const res = await req('PUT', '/api/distribution/nonexistent/activate', {}, adminHeaders());
+    assert.strictEqual(res.status, 404);
+  });
+
+  test('returns 200 with status active', async () => {
+    const res = await req('PUT', '/api/distribution/dist-act/activate', {}, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual((await res.json()).status, 'active');
+  });
+});
+
+describe('PUT /api/distribution/:id/activate — archives previous active', () => {
+  useDb((db) => {
+    seedDistribution(db, 'dist-old', 'Anterior', 2, 'active');
+    seedDistribution(db, 'dist-new', 'Nova', 2, 'planning');
+  });
+
+  test('sets previous active distribution to complete', async () => {
+    await req('PUT', '/api/distribution/dist-new/activate', {}, adminHeaders());
+    const list = await (await req('GET', '/api/distribution', undefined, adminHeaders())).json();
+    const old = list.find((d) => d.id === 'dist-old');
+    assert.strictEqual(old.status, 'complete');
+  });
+});
+
+// ============================================================================
+// GET /api/packing/active
+// ============================================================================
+describe('GET /api/packing/active — no active distribution', () => {
+  useDb();
+
+  test('returns 401 without token', async () => {
+    const res = await fetch(`${BASE}/api/packing/active`);
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 404 when no active distribution exists', async () => {
+    const res = await req('GET', '/api/packing/active', undefined, adminHeaders());
+    assert.strictEqual(res.status, 404);
+  });
+});
+
+describe('GET /api/packing/active — with active distribution', () => {
+  useDb((db) => {
+    seedStore(db, 'store-1', 'Loja 1', 'STRTK1');
+    seedDistribution(db, 'dist-active', 'Rodada Ativa', 1, 'active');
+    seedBox(db, 'box-1', 'dist-active', 1, 'store-1', 'pending');
+  });
+
+  test('returns 200 with distribution, boxes and stats', async () => {
+    const res = await req('GET', '/api/packing/active', undefined, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(body.distribution);
+    assert.strictEqual(body.distribution.status, 'active');
+    assert.ok(Array.isArray(body.boxes));
+    assert.ok(body.stats);
+    assert.ok(typeof body.stats.total_boxes === 'number');
+    assert.ok(typeof body.stats.pending === 'number');
+    assert.ok(typeof body.stats.in_progress === 'number');
+    assert.ok(typeof body.stats.done === 'number');
+  });
+});
+
+// ============================================================================
+// POST /api/packing/boxes/:boxId/claim
+// ============================================================================
+describe('POST /api/packing/boxes/:boxId/claim', () => {
+  useDb((db) => {
+    seedStore(db, 'store-1', 'Loja 1', 'STRTK1');
+    seedDistribution(db, 'dist-1', 'Rodada 1', 1, 'active');
+    seedBox(db, 'box-claim', 'dist-1', 1, 'store-1', 'pending');
+  });
+
+  test('returns 401 without token', async () => {
+    const res = await req('POST', '/api/packing/boxes/box-claim/claim', { responsible_name: 'João' });
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 400 when responsible_name is missing', async () => {
+    const res = await req('POST', '/api/packing/boxes/box-claim/claim', {}, adminHeaders());
+    assert.strictEqual(res.status, 400);
+    assert.ok((await res.json()).detail);
+  });
+
+  test('returns 409 when box is not found', async () => {
+    const res = await req('POST', '/api/packing/boxes/nonexistent-box/claim', { responsible_name: 'João' }, adminHeaders());
+    assert.strictEqual(res.status, 409);
+  });
+
+  test('returns 200 on successful claim', async () => {
+    const res = await req('POST', '/api/packing/boxes/box-claim/claim', { responsible_name: 'Maria' }, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    assert.ok((await res.json()).message);
+  });
+
+  test('returns 409 when box is already claimed', async () => {
+    await req('POST', '/api/packing/boxes/box-claim/claim', { responsible_name: 'Maria' }, adminHeaders());
+    const res = await req('POST', '/api/packing/boxes/box-claim/claim', { responsible_name: 'João' }, adminHeaders());
+    assert.strictEqual(res.status, 409);
+  });
+});
+
+// ============================================================================
+// POST /api/packing/boxes/:boxId/complete
+// ============================================================================
+describe('POST /api/packing/boxes/:boxId/complete', () => {
+  useDb((db) => {
+    seedStore(db, 'store-1', 'Loja 1', 'STRTK1');
+    seedDistribution(db, 'dist-1', 'Rodada 1', 1, 'active');
+    seedBox(db, 'box-complete', 'dist-1', 1, 'store-1', 'in_progress', 'João');
+  });
+
+  test('returns 401 without token', async () => {
+    const res = await req('POST', '/api/packing/boxes/box-complete/complete', {});
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 400 when box is not found', async () => {
+    const res = await req('POST', '/api/packing/boxes/nonexistent/complete', {}, adminHeaders());
+    assert.strictEqual(res.status, 400);
+  });
+
+  test('returns 200 with recalc_triggered on success', async () => {
+    const res = await req('POST', '/api/packing/boxes/box-complete/complete', {}, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(body.message);
+    assert.ok(typeof body.recalc_triggered === 'boolean');
+  });
+});
+
+// ============================================================================
+// POST /api/packing/boxes/:boxId/cancel
+// ============================================================================
+describe('POST /api/packing/boxes/:boxId/cancel', () => {
+  useDb((db) => {
+    seedStore(db, 'store-1', 'Loja 1', 'STRTK1');
+    seedDistribution(db, 'dist-1', 'Rodada 1', 1, 'active');
+    seedBox(db, 'box-cancel', 'dist-1', 1, 'store-1', 'in_progress', 'João');
+  });
+
+  test('returns 401 without token', async () => {
+    const res = await req('POST', '/api/packing/boxes/box-cancel/cancel', {});
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('returns 400 when box is not found', async () => {
+    const res = await req('POST', '/api/packing/boxes/nonexistent/cancel', {}, adminHeaders());
+    assert.strictEqual(res.status, 400);
+  });
+
+  test('returns 200 with recalc_triggered on success', async () => {
+    const res = await req('POST', '/api/packing/boxes/box-cancel/cancel', {}, adminHeaders());
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(body.message);
+    assert.ok(typeof body.recalc_triggered === 'boolean');
+  });
+});

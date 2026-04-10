@@ -444,6 +444,202 @@ class TestStoreWSDebitRequest:
 # ============================================================================
 # WS rate limiting
 # ============================================================================
+
+
+# ============================================================================
+# Admin WS — missing token closes connection
+# ============================================================================
+class TestAdminWSMissingToken:
+    def test_server_closes_for_missing_token(self, client):
+        with pytest.raises(Exception):
+            with client.websocket_connect(f"/ws/admin") as ws:
+                ws.receive_text()
+
+
+# ============================================================================
+# Admin WS — add_credit missing validations
+# ============================================================================
+class TestAdminWSAddCreditExtra:
+    def test_rejects_negative_amount(self, client, seed):
+        seed(lambda conn: seed_comanda(conn, "F001", "Alice", 1000))
+        with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as ws:
+            ws.receive_json()
+            ws.send_json({"type": "add_credit", "comanda_code": "F001", "amount": -50})
+            reply = ws.receive_json()
+            assert reply["type"] == "error"
+            assert reply["reason"] == "invalid_amount"
+
+
+# ============================================================================
+# Admin WS — cart_items on create_comanda
+# ============================================================================
+class TestAdminWSCartItems:
+    def test_cart_items_with_valid_entries_increment_category_total_entries(self, client):
+        with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as ws:
+            ws.receive_json()
+            ws.send_json({
+                "type": "create_comanda",
+                "holder_name": "CartTest",
+                "initial_balance": 0,
+                "cart_items": [{"name": "Jaqueta", "quantity": 3}]
+            })
+            msgs = [ws.receive_json(), ws.receive_json()]
+            assert any(m["type"] == "comanda_created" for m in msgs)
+
+        # Verify category total_entries was incremented via the same client
+        cats = client.get("/api/categories").json()
+        jaqueta = next((c for c in cats if c["name"] == "Jaqueta"), None)
+        assert jaqueta is not None
+        assert jaqueta["total_entries"] == 3
+
+    def test_cart_items_with_invalid_quantity_are_silently_ignored(self, client):
+        with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as ws:
+            ws.receive_json()
+            ws.send_json({
+                "type": "create_comanda",
+                "holder_name": "CartBad",
+                "initial_balance": 0,
+                "cart_items": [{"name": "Bolsa", "quantity": -5}]
+            })
+            msgs = [ws.receive_json(), ws.receive_json()]
+            # Comanda is still created despite invalid cart item
+            assert any(m["type"] == "comanda_created" for m in msgs)
+
+
+# ============================================================================
+# Admin WS — register_category extra validations
+# ============================================================================
+class TestAdminWSRegisterCategoryExtra:
+    def test_price_0_does_not_update_existing_price(self, client):
+        with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as ws:
+            ws.receive_json()
+            # Create category with price 1500
+            ws.send_json({"type": "register_category", "name": "Sapato", "price": 1500, "total_entries": 0})
+            ws.receive_json()
+            # Update with price=0 (should preserve existing price)
+            ws.send_json({"type": "register_category", "name": "Sapato", "price": 0, "total_entries": 5})
+            reply = ws.receive_json()
+            assert reply["type"] == "category_updated"
+            assert reply["category"]["price"] == 1500
+            assert reply["category"]["total_entries"] == 5
+
+    def test_rejects_float_total_entries(self, client):
+        with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as ws:
+            ws.receive_json()
+            ws.send_json({"type": "register_category", "name": "Bolsa", "price": 500, "total_entries": 1.5})
+            reply = ws.receive_json()
+            assert reply["type"] == "error"
+            assert reply["reason"] == "invalid_amount"
+
+
+# ============================================================================
+# Admin WS — broadcast to multiple admin terminals
+# ============================================================================
+class TestAdminWSBroadcast:
+    def test_comanda_created_broadcast_to_second_admin_terminal(self, client):
+        with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as ws1:
+            ws1.receive_json()  # ws1 greeting
+            with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as ws2:
+                ws2.receive_json()  # ws2 greeting
+                ws1.send_json({"type": "create_comanda", "holder_name": "BroadcastUser", "initial_balance": 0})
+                # Drain all broadcasts on both websockets (2 each: comanda_created + update_next_code)
+                msgs_ws2 = [ws2.receive_json(), ws2.receive_json()]
+                msgs_ws1 = [ws1.receive_json(), ws1.receive_json()]
+                assert any(m["type"] == "comanda_created" for m in msgs_ws2)
+                assert any(m["type"] == "comanda_created" for m in msgs_ws1)
+
+
+# ============================================================================
+# Store WS — balance_query empty code
+# ============================================================================
+class TestStoreWSBalanceQueryEmpty:
+    def test_returns_error_for_empty_comanda_code(self, client, seed):
+        seed(lambda conn: seed_store(conn))
+        with client.websocket_connect("/ws/store?token=STRTK1") as ws:
+            ws.receive_json()
+            ws.send_json({"type": "balance_query", "comanda_code": ""})
+            reply = ws.receive_json()
+            assert reply["type"] == "error"
+            assert reply["reason"] == "comanda_not_found"
+
+
+# ============================================================================
+# Store WS — debit_request empty code
+# ============================================================================
+class TestStoreWSDebitEmpty:
+    def test_empty_comanda_code_returns_debit_rejected_comanda_not_found(self, client, seed):
+        seed(lambda conn: seed_store(conn))
+        with client.websocket_connect("/ws/store?token=STRTK1") as ws:
+            ws.receive_json()
+            ws.send_json({"type": "debit_request", "comanda_code": "", "amount": 100})
+            reply = ws.receive_json()
+            assert reply["type"] == "debit_rejected"
+            assert reply["reason"] == "comanda_not_found"
+
+
+# ============================================================================
+# Store WS — broadcast after debit
+# ============================================================================
+class TestStoreWSBroadcast:
+    def test_debit_broadcasts_balance_updated_to_all_connected_store_terminals(self, client, seed):
+        seed(lambda conn: (
+            seed_comanda(conn, "F001", "Alice", 2000),
+            seed_store(conn),
+        ))
+        with client.websocket_connect("/ws/store?token=STRTK1") as ws1:
+            ws1.receive_json()  # ws1 greeting
+            with client.websocket_connect("/ws/store?token=STRTK1") as ws2:
+                ws2.receive_json()  # ws2 greeting
+                ws1.send_json({"type": "debit_request", "comanda_code": "F001", "amount": 200})
+                # ws1 receives debit_confirmed, then balance_updated (broadcast to self too)
+                msg_ws1 = ws1.receive_json()  # debit_confirmed
+                broadcast_ws2 = ws2.receive_json()  # balance_updated
+                broadcast_ws1 = ws1.receive_json()  # balance_updated (also sent to ws1)
+                assert msg_ws1["type"] == "debit_confirmed"
+                assert broadcast_ws2["type"] == "balance_updated"
+                assert broadcast_ws2["comanda_code"] == "F001"
+                assert broadcast_ws1["type"] == "balance_updated"
+
+    def test_debit_broadcasts_admin_balance_updated_to_connected_admin(self, client, seed):
+        seed(lambda conn: (
+            seed_comanda(conn, "F001", "Bob", 2500),
+            seed_store(conn),
+        ))
+        with client.websocket_connect(f"/ws/admin?token={ADMIN_TOKEN}") as admin_ws:
+            admin_ws.receive_json()  # admin greeting
+            with client.websocket_connect("/ws/store?token=STRTK1") as store_ws:
+                store_ws.receive_json()  # store greeting
+                store_ws.send_json({"type": "debit_request", "comanda_code": "F001", "amount": 300})
+                # debit_confirmed goes to store_ws; balance_updated broadcasts to all stores; admin_balance_updated to admins
+                debit_confirmed = store_ws.receive_json()  # debit_confirmed
+                balance_updated = store_ws.receive_json()  # balance_updated broadcast (self)
+                admin_msg = admin_ws.receive_json()  # admin_balance_updated
+                assert debit_confirmed["type"] == "debit_confirmed"
+                assert balance_updated["type"] == "balance_updated"
+                assert admin_msg["type"] == "admin_balance_updated"
+                assert admin_msg["comanda_code"] == "F001"
+
+
+# ============================================================================
+# Store WS — token revocation closes active WebSocket
+# ============================================================================
+class TestStoreWSRevocation:
+    def test_revoke_token_via_rest_closes_active_websocket(self, client, seed):
+        seed(lambda conn: seed_store(conn, "store-rev", "Revoke Me", "REVTK1"))
+        with client.websocket_connect("/ws/store?token=REVTK1") as ws:
+            ws.receive_json()  # greeting
+            # Revoke the token via REST
+            res = client.post("/api/stores/store-rev/revoke_token", headers={"token": ADMIN_TOKEN})
+            assert res.status_code == 200
+            # Server should have closed the WebSocket — receiving should raise
+            with pytest.raises(Exception):
+                ws.receive_json()
+
+
+# ============================================================================
+# WS rate limiting (must remain last — rate-limits a store WS connection,
+# which can interfere with subsequent WS tests if not the final class)
+# ============================================================================
 class TestWSRateLimit:
     def test_exceeding_300_messages_triggers_rate_limit_exceeded(self, client, seed):
         seed(lambda conn: seed_store(conn))

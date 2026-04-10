@@ -375,3 +375,391 @@ class TestBodySizeLimit:
                      "Content-Length": str(len(big_body.encode()))},
         )
         assert res.status_code == 413
+
+
+# ============================================================================
+# Distribution seed helpers
+# ============================================================================
+def seed_distribution(conn, dist_id="dist-1", name="Rodada 1", num_boxes=2, status="planning"):
+    from datetime import datetime, timezone
+    conn.execute(
+        "INSERT INTO distributions (id, name, num_boxes, status, needs_recalc, created_at) VALUES (?,?,?,?,?,?)",
+        (dist_id, name, num_boxes, status, 0, datetime.now(timezone.utc).isoformat()),
+    )
+    conn.commit()
+    return dist_id
+
+
+def seed_box(conn, box_id, distribution_id, box_number, store_id, status="pending", responsible_name=None):
+    conn.execute(
+        "INSERT INTO boxes (id, distribution_id, box_number, assigned_store_id, status, responsible_name) VALUES (?,?,?,?,?,?)",
+        (box_id, distribution_id, box_number, store_id, status, responsible_name),
+    )
+    conn.commit()
+    return box_id
+
+
+def seed_category_with_entries(conn, cat_id, name, price, entries):
+    conn.execute(
+        "INSERT INTO categories (id, name, price, total_entries) VALUES (?,?,?,?)",
+        (cat_id, name, price, entries),
+    )
+    conn.commit()
+    return cat_id
+
+
+# ============================================================================
+# GET /api/distribution
+# ============================================================================
+class TestGetDistribution:
+    def test_returns_401_without_token(self, client):
+        assert client.get("/api/distribution").status_code == 401
+
+    def test_returns_empty_array_when_no_distributions_exist(self, client):
+        res = client.get("/api/distribution", headers=ah())
+        assert res.status_code == 200
+        assert res.json() == []
+
+    def test_returns_all_distributions(self, client, seed):
+        seed(lambda conn: (
+            seed_distribution(conn, "dist-1", "Rodada 1", 2, "planning"),
+            seed_distribution(conn, "dist-2", "Rodada 2", 3, "active"),
+        ))
+        body = client.get("/api/distribution", headers=ah()).json()
+        assert len(body) == 2
+
+    def test_each_distribution_has_required_fields(self, client, seed):
+        seed(lambda conn: seed_distribution(conn, "dist-1", "Rodada 1", 2, "planning"))
+        body = client.get("/api/distribution", headers=ah()).json()
+        for d in body:
+            assert d["id"]
+            assert d["name"]
+            assert isinstance(d["num_boxes"], int)
+            assert d["status"]
+            assert d["created_at"]
+
+
+# ============================================================================
+# POST /api/distribution
+# ============================================================================
+class TestCreateDistribution:
+    def test_returns_401_without_token(self, client):
+        assert client.post("/api/distribution", json={"name": "Rodada 1", "num_boxes": 2}).status_code == 401
+
+    def test_returns_400_when_name_is_missing(self, client):
+        res = client.post("/api/distribution", json={"num_boxes": 2}, headers=ah())
+        assert res.status_code == 400
+        assert res.json()["detail"] == "name and num_boxes are required"
+
+    def test_returns_400_when_num_boxes_is_missing(self, client):
+        res = client.post("/api/distribution", json={"name": "Rodada 1"}, headers=ah())
+        assert res.status_code == 400
+        assert res.json()["detail"] == "name and num_boxes are required"
+
+    def test_returns_400_when_num_boxes_is_0(self, client):
+        res = client.post("/api/distribution", json={"name": "Rodada 1", "num_boxes": 0}, headers=ah())
+        assert res.status_code == 400
+        assert res.json()["detail"] == "name and num_boxes are required"
+
+    def test_returns_400_when_num_boxes_is_negative(self, client):
+        res = client.post("/api/distribution", json={"name": "Rodada 1", "num_boxes": -1}, headers=ah())
+        assert res.status_code == 400
+        assert res.json()["detail"] == "num_boxes must be a positive integer"
+
+    def test_returns_400_when_num_boxes_is_a_float(self, client):
+        res = client.post("/api/distribution", json={"name": "Rodada 1", "num_boxes": 1.5}, headers=ah())
+        assert res.status_code == 400
+        assert res.json()["detail"] == "num_boxes must be a positive integer"
+
+    def test_returns_201_with_correct_shape_on_success(self, client):
+        res = client.post("/api/distribution", json={"name": "Rodada 1", "num_boxes": 2}, headers=ah())
+        assert res.status_code == 201
+        body = res.json()
+        assert body["id"]
+        assert body["name"] == "Rodada 1"
+        assert body["num_boxes"] == 2
+        assert body["status"] == "planning"
+
+    def test_created_distribution_appears_in_list(self, client):
+        client.post("/api/distribution", json={"name": "Nova Rodada", "num_boxes": 3}, headers=ah())
+        body = client.get("/api/distribution", headers=ah()).json()
+        assert any(d["name"] == "Nova Rodada" for d in body)
+
+
+# ============================================================================
+# GET /api/distribution/suggest
+# ============================================================================
+class TestGetDistributionSuggest:
+    def test_returns_401_without_token(self, client):
+        assert client.get("/api/distribution/suggest").status_code == 401
+
+    def test_returns_200_with_required_fields(self, client, seed):
+        seed(lambda conn: (
+            seed_category_with_entries(conn, "cat-1", "Jaqueta", 1500, 10),
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+        ))
+        res = client.get("/api/distribution/suggest", headers=ah())
+        assert res.status_code == 200
+        body = res.json()
+        assert isinstance(body["suggested"], int)
+        assert isinstance(body["reasoning"], str)
+
+
+# ============================================================================
+# GET /api/distribution/:id
+# ============================================================================
+class TestGetDistributionById:
+    def test_returns_401_without_token(self, client, seed):
+        seed(lambda conn: seed_distribution(conn, "dist-1"))
+        assert client.get("/api/distribution/dist-1").status_code == 401
+
+    def test_returns_404_for_unknown_distribution(self, client):
+        res = client.get("/api/distribution/nonexistent", headers=ah())
+        assert res.status_code == 404
+        assert res.json()["detail"] == "Distribution not found"
+
+    def test_returns_200_with_distribution_and_boxes(self, client, seed):
+        seed(lambda conn: seed_distribution(conn, "dist-detail", "Detalhe", 2, "planning"))
+        res = client.get("/api/distribution/dist-detail", headers=ah())
+        assert res.status_code == 200
+        body = res.json()
+        assert body["distribution"]["id"] == "dist-detail"
+        assert isinstance(body["boxes"], list)
+
+
+# ============================================================================
+# POST /api/distribution/:id/calculate
+# ============================================================================
+class TestCalculateDistribution:
+    def test_returns_401_without_token(self, client, seed):
+        seed(lambda conn: seed_distribution(conn, "dist-1"))
+        assert client.post("/api/distribution/dist-1/calculate").status_code == 401
+
+    def test_returns_404_for_unknown_distribution(self, client):
+        res = client.post("/api/distribution/nonexistent/calculate", headers=ah())
+        assert res.status_code == 404
+
+    def test_returns_400_when_no_stores_registered(self, client, seed):
+        seed(lambda conn: (
+            seed_category_with_entries(conn, "cat-1", "Jaqueta", 1500, 10),
+            seed_distribution(conn, "dist-no-stores", "Sem Lojas", 2, "planning"),
+        ))
+        res = client.post("/api/distribution/dist-no-stores/calculate", headers=ah())
+        assert res.status_code == 400
+        assert res.json()["detail"]
+
+    def test_returns_200_with_message_and_warnings_on_success(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_category_with_entries(conn, "cat-1", "Jaqueta", 1500, 10),
+            seed_distribution(conn, "dist-calc", "Para Calcular", 2, "planning"),
+        ))
+        res = client.post("/api/distribution/dist-calc/calculate", headers=ah())
+        assert res.status_code == 200
+        body = res.json()
+        assert isinstance(body["message"], str)
+        assert isinstance(body["warnings"], list)
+
+    def test_boxes_are_created_after_calculate(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_category_with_entries(conn, "cat-1", "Jaqueta", 1500, 10),
+            seed_distribution(conn, "dist-calc2", "Para Calcular 2", 2, "planning"),
+        ))
+        client.post("/api/distribution/dist-calc2/calculate", headers=ah())
+        detail = client.get("/api/distribution/dist-calc2", headers=ah()).json()
+        assert len(detail["boxes"]) == 2
+
+
+# ============================================================================
+# DELETE /api/distribution/:id
+# ============================================================================
+class TestDeleteDistribution:
+    def test_returns_401_without_token(self, client, seed):
+        seed(lambda conn: seed_distribution(conn, "dist-del"))
+        assert client.delete("/api/distribution/dist-del").status_code == 401
+
+    def test_returns_404_for_unknown_distribution(self, client):
+        assert client.delete("/api/distribution/nonexistent", headers=ah()).status_code == 404
+
+    def test_returns_200_and_distribution_is_gone(self, client, seed):
+        seed(lambda conn: seed_distribution(conn, "dist-del", "Para Excluir", 2, "planning"))
+        res = client.delete("/api/distribution/dist-del", headers=ah())
+        assert res.status_code == 200
+        assert res.json()["message"]
+        assert client.get("/api/distribution/dist-del", headers=ah()).status_code == 404
+
+    def test_returns_409_when_active_with_in_progress_boxes(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-active", "Rodada Ativa", 1, "active"),
+            seed_box(conn, "box-ip", "dist-active", 1, "store-1", "in_progress", "João"),
+        ))
+        res = client.delete("/api/distribution/dist-active", headers=ah())
+        assert res.status_code == 409
+        assert res.json()["detail"]
+
+
+# ============================================================================
+# PUT /api/distribution/:id/activate
+# ============================================================================
+class TestActivateDistribution:
+    def test_returns_401_without_token(self, client, seed):
+        seed(lambda conn: seed_distribution(conn, "dist-act"))
+        assert client.put("/api/distribution/dist-act/activate").status_code == 401
+
+    def test_returns_404_for_unknown_distribution(self, client):
+        assert client.put("/api/distribution/nonexistent/activate", headers=ah()).status_code == 404
+
+    def test_returns_200_with_status_active(self, client, seed):
+        seed(lambda conn: seed_distribution(conn, "dist-act", "Para Ativar", 2, "planning"))
+        res = client.put("/api/distribution/dist-act/activate", headers=ah())
+        assert res.status_code == 200
+        assert res.json()["status"] == "active"
+
+    def test_archives_previous_active_distribution(self, client, seed):
+        seed(lambda conn: (
+            seed_distribution(conn, "dist-old", "Anterior", 2, "active"),
+            seed_distribution(conn, "dist-new", "Nova", 2, "planning"),
+        ))
+        client.put("/api/distribution/dist-new/activate", headers=ah())
+        distributions = client.get("/api/distribution", headers=ah()).json()
+        old = next((d for d in distributions if d["id"] == "dist-old"), None)
+        assert old["status"] == "complete"
+
+
+# ============================================================================
+# GET /api/packing/active
+# ============================================================================
+class TestGetPackingActive:
+    def test_returns_401_without_token(self, client):
+        assert client.get("/api/packing/active").status_code == 401
+
+    def test_returns_404_when_no_active_distribution(self, client):
+        assert client.get("/api/packing/active", headers=ah()).status_code == 404
+
+    def test_returns_200_with_distribution_boxes_and_stats(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-active", "Rodada Ativa", 1, "active"),
+            seed_box(conn, "box-1", "dist-active", 1, "store-1", "pending"),
+        ))
+        res = client.get("/api/packing/active", headers=ah())
+        assert res.status_code == 200
+        body = res.json()
+        assert body["distribution"]["status"] == "active"
+        assert isinstance(body["boxes"], list)
+        assert isinstance(body["stats"]["total_boxes"], int)
+        assert isinstance(body["stats"]["pending"], int)
+        assert isinstance(body["stats"]["in_progress"], int)
+        assert isinstance(body["stats"]["done"], int)
+
+
+# ============================================================================
+# POST /api/packing/boxes/:boxId/claim
+# ============================================================================
+class TestClaimBox:
+    def test_returns_401_without_token(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-1", "Rodada 1", 1, "active"),
+            seed_box(conn, "box-claim", "dist-1", 1, "store-1", "pending"),
+        ))
+        assert client.post("/api/packing/boxes/box-claim/claim",
+                           json={"responsible_name": "João"}).status_code == 401
+
+    def test_returns_400_when_responsible_name_is_missing(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-1", "Rodada 1", 1, "active"),
+            seed_box(conn, "box-claim", "dist-1", 1, "store-1", "pending"),
+        ))
+        res = client.post("/api/packing/boxes/box-claim/claim", json={}, headers=ah())
+        assert res.status_code == 400
+
+    def test_returns_409_when_box_not_found(self, client):
+        res = client.post("/api/packing/boxes/nonexistent-box/claim",
+                          json={"responsible_name": "João"}, headers=ah())
+        assert res.status_code == 409
+
+    def test_returns_200_on_successful_claim(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-1", "Rodada 1", 1, "active"),
+            seed_box(conn, "box-claim", "dist-1", 1, "store-1", "pending"),
+        ))
+        res = client.post("/api/packing/boxes/box-claim/claim",
+                          json={"responsible_name": "Maria"}, headers=ah())
+        assert res.status_code == 200
+        assert res.json()["message"]
+
+    def test_returns_409_when_box_already_claimed(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-1", "Rodada 1", 1, "active"),
+            seed_box(conn, "box-claim", "dist-1", 1, "store-1", "pending"),
+        ))
+        client.post("/api/packing/boxes/box-claim/claim",
+                    json={"responsible_name": "Maria"}, headers=ah())
+        res = client.post("/api/packing/boxes/box-claim/claim",
+                          json={"responsible_name": "João"}, headers=ah())
+        assert res.status_code == 409
+
+
+# ============================================================================
+# POST /api/packing/boxes/:boxId/complete
+# ============================================================================
+class TestCompleteBox:
+    def test_returns_401_without_token(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-1", "Rodada 1", 1, "active"),
+            seed_box(conn, "box-complete", "dist-1", 1, "store-1", "in_progress", "João"),
+        ))
+        assert client.post("/api/packing/boxes/box-complete/complete").status_code == 401
+
+    def test_returns_400_when_box_not_found(self, client):
+        res = client.post("/api/packing/boxes/nonexistent/complete", headers=ah())
+        assert res.status_code == 400
+
+    def test_returns_200_with_recalc_triggered_on_success(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-1", "Rodada 1", 1, "active"),
+            seed_box(conn, "box-complete", "dist-1", 1, "store-1", "in_progress", "João"),
+        ))
+        res = client.post("/api/packing/boxes/box-complete/complete", headers=ah())
+        assert res.status_code == 200
+        body = res.json()
+        assert body["message"]
+        assert isinstance(body["recalc_triggered"], bool)
+
+
+# ============================================================================
+# POST /api/packing/boxes/:boxId/cancel
+# ============================================================================
+class TestCancelBox:
+    def test_returns_401_without_token(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-1", "Rodada 1", 1, "active"),
+            seed_box(conn, "box-cancel", "dist-1", 1, "store-1", "in_progress", "João"),
+        ))
+        assert client.post("/api/packing/boxes/box-cancel/cancel").status_code == 401
+
+    def test_returns_400_when_box_not_found(self, client):
+        res = client.post("/api/packing/boxes/nonexistent/cancel", headers=ah())
+        assert res.status_code == 400
+
+    def test_returns_200_with_recalc_triggered_on_success(self, client, seed):
+        seed(lambda conn: (
+            seed_store(conn, "store-1", "Loja 1", "STRTK1"),
+            seed_distribution(conn, "dist-1", "Rodada 1", 1, "active"),
+            seed_box(conn, "box-cancel", "dist-1", 1, "store-1", "in_progress", "João"),
+        ))
+        res = client.post("/api/packing/boxes/box-cancel/cancel", headers=ah())
+        assert res.status_code == 200
+        body = res.json()
+        assert body["message"]
+        assert isinstance(body["recalc_triggered"], bool)
+
