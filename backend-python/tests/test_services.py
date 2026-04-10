@@ -1,7 +1,7 @@
 """Unit tests for service modules — mirrors backend-node/tests/services.test.js"""
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 from tests.helpers.db import create_test_db
 from app.services.comanda_service import (
@@ -21,12 +21,12 @@ def seed_comanda(conn, code="F001", holder="Test User", balance=2000):
     cid = f"cid-{code}"
     conn.execute(
         "INSERT INTO comandas (id, code, holder_name, created_at) VALUES (?,?,?,?)",
-        (cid, code, holder, datetime.utcnow().isoformat()),
+        (cid, code, holder, datetime.now(timezone.utc).isoformat()),
     )
     if balance > 0:
         conn.execute(
             "INSERT INTO events (id, type, comanda_id, amount, note, timestamp) VALUES (?,?,?,?,?,?)",
-            (f"eid-{code}", "credit", cid, balance, "Saldo inicial", datetime.utcnow().isoformat()),
+            (f"eid-{code}", "credit", cid, balance, "Saldo inicial", datetime.now(timezone.utc).isoformat()),
         )
     conn.commit()
     return cid

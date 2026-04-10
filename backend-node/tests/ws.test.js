@@ -487,14 +487,11 @@ describe('Admin WS — malformed messages', () => {
     await closeWs(ws);
   });
 
-  test('unknown message type is silently ignored', async () => {
+  test('unknown message type returns error: unknown_message_type', async () => {
     const { ws } = await connectAdmin();
-    ws.send(JSON.stringify({ type: 'unknown_type', foo: 'bar' }));
-    const result = await Promise.race([
-      waitForMessage(ws).then(() => 'got-message'),
-      new Promise((r) => setTimeout(() => r('timeout'), 300)),
-    ]);
-    assert.strictEqual(result, 'timeout');
+    const reply = await send(ws, { type: 'unknown_type', foo: 'bar' });
+    assert.strictEqual(reply.type, 'error');
+    assert.strictEqual(reply.reason, 'unknown_message_type');
     await closeWs(ws);
   });
 });

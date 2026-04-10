@@ -7,7 +7,7 @@ from conftest.py.
 
 import os
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "admin_token_change_me")
 WRONG_TOKEN = "wrong-token"
@@ -25,12 +25,12 @@ def seed_comanda(conn, code="F001", holder="Test User", balance=2000):
     cid = f"comanda-{code}"
     conn.execute(
         "INSERT INTO comandas (id, code, holder_name, created_at) VALUES (?,?,?,?)",
-        (cid, code, holder, datetime.utcnow().isoformat()),
+        (cid, code, holder, datetime.now(timezone.utc).isoformat()),
     )
     if balance > 0:
         conn.execute(
             "INSERT INTO events (id, type, comanda_id, amount, note, timestamp) VALUES (?,?,?,?,?,?)",
-            (f"evt-{code}", "credit", cid, balance, "Saldo inicial", datetime.utcnow().isoformat()),
+            (f"evt-{code}", "credit", cid, balance, "Saldo inicial", datetime.now(timezone.utc).isoformat()),
         )
     conn.commit()
     return cid

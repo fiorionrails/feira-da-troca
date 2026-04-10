@@ -13,7 +13,7 @@ connections to the same data.
 import threading
 import os
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 from tests.helpers.db import create_shared_test_db, open_shared_db
 from app.services.comanda_service import get_balance
@@ -31,12 +31,12 @@ def seed_comanda(conn, code="F001", holder="Test User", balance=5000):
     cid = f"cid-{code}"
     conn.execute(
         "INSERT INTO comandas (id, code, holder_name, created_at) VALUES (?,?,?,?)",
-        (cid, code, holder, datetime.utcnow().isoformat()),
+        (cid, code, holder, datetime.now(timezone.utc).isoformat()),
     )
     if balance > 0:
         conn.execute(
             "INSERT INTO events (id, type, comanda_id, amount, note, timestamp) VALUES (?,?,?,?,?,?)",
-            (f"eid-{code}", "credit", cid, balance, "Saldo inicial", datetime.utcnow().isoformat()),
+            (f"eid-{code}", "credit", cid, balance, "Saldo inicial", datetime.now(timezone.utc).isoformat()),
         )
     conn.commit()
     return cid
