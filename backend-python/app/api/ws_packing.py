@@ -36,7 +36,7 @@ async def websocket_packing(websocket: WebSocket, token: str = Query(...)):
     # Autenticação obrigatória com token admin
     if token != settings.admin_token:
         await websocket.accept() # Precisamos aceitar para poder fechar com código
-        await websocket.close(code=1008, reason="Unauthorized")
+        await websocket.close(code=4001, reason="Unauthorized")
         return
 
     await manager.connect(websocket)

@@ -74,6 +74,14 @@ CREATE INDEX IF NOT EXISTS idx_box_items_category_id ON box_items(category_id);
 
 _initialized = False
 
+def _override_db_path(new_path: str) -> None:
+    """FOR TESTING ONLY. Overrides the database path and resets initialization state
+    so the next get_db_connection() call re-initializes the schema in the new database.
+    """
+    global DB_PATH, _initialized
+    DB_PATH = new_path
+    _initialized = False
+
 def _init_schema(conn: sqlite3.Connection) -> None:
     """Creates all tables and views if they don't exist (auto-init like Node.js getDb)."""
     conn.executescript(_SCHEMA_SQL)

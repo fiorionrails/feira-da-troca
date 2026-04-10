@@ -11,6 +11,7 @@ from app.services.comanda_service import get_comanda_by_code, get_balance
 from app.services.transaction_service import process_debit, InsufficientBalanceError, InvalidAmountError
 from app.utils import parse_positive_int
 from app.api.ws_admin import manager as admin_manager  # Importa para notificar admins
+import app.logger as log
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
@@ -138,6 +139,8 @@ async def websocket_store(websocket: WebSocket, token: str):
                         event = process_debit(conn, comanda.id, amount, store.id)
                         new_balance = get_balance(conn, comanda.id)
 
+                        log.debito_confirmado(comanda.code, comanda.holder_name, amount, new_balance, store.name)
+
                         await websocket.send_json({
                             "type": "debit_confirmed",
                             "event_id": event.id,
@@ -165,6 +168,7 @@ async def websocket_store(websocket: WebSocket, token: str):
 
                     except InsufficientBalanceError:
                         current_balance = get_balance(conn, comanda.id)
+                        log.debito_rejeitado(comanda.code, "insufficient_balance", amount, current_balance, store.name)
                         await websocket.send_json({
                             "type": "debit_rejected",
                             "reason": "insufficient_balance",
@@ -172,6 +176,7 @@ async def websocket_store(websocket: WebSocket, token: str):
                             "requested": amount
                         })
                     except InvalidAmountError:
+                        log.debito_rejeitado(comanda.code, "invalid_amount", amount, None, store.name)
                         await websocket.send_json({
                             "type": "debit_rejected",
                             "reason": "invalid_amount",

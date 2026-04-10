@@ -22,7 +22,7 @@ const { createTestDb } = require('./helpers/db');
 const db0 = createTestDb();
 require('../src/database')._overrideDb(db0);
 
-const { server } = require('../src/app');
+const { server, wss } = require('../src/app');
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin_token_change_me';
 const WRONG_TOKEN = 'wrong-token-xyz';
@@ -34,8 +34,11 @@ before(async () => {
   port = server.address().port;
 });
 
-after(() => {
-  server.close();
+after((done) => {
+  // Force-terminate any lingering WebSocket connections before closing the server,
+  // otherwise wss.close() blocks waiting for clients to disconnect gracefully.
+  for (const client of wss.clients) client.terminate();
+  wss.close(() => server.close(done));
 });
 
 // ---------------------------------------------------------------------------
@@ -484,14 +487,11 @@ describe('Admin WS — malformed messages', () => {
     await closeWs(ws);
   });
 
-  test('unknown message type is silently ignored', async () => {
+  test('unknown message type returns error: unknown_message_type', async () => {
     const { ws } = await connectAdmin();
-    ws.send(JSON.stringify({ type: 'unknown_type', foo: 'bar' }));
-    const result = await Promise.race([
-      waitForMessage(ws).then(() => 'got-message'),
-      new Promise((r) => setTimeout(() => r('timeout'), 300)),
-    ]);
-    assert.strictEqual(result, 'timeout');
+    const reply = await send(ws, { type: 'unknown_type', foo: 'bar' });
+    assert.strictEqual(reply.type, 'error');
+    assert.strictEqual(reply.reason, 'unknown_message_type');
     await closeWs(ws);
   });
 });

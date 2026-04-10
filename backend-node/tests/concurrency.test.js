@@ -29,7 +29,7 @@ const { createTestDb } = require('./helpers/db');
 const db0 = createTestDb();
 require('../src/database')._overrideDb(db0);
 
-const { server } = require('../src/app');
+const { server, wss } = require('../src/app');
 
 let port;
 
@@ -38,8 +38,11 @@ before(async () => {
   port = server.address().port;
 });
 
-after(() => {
-  server.close();
+after((done) => {
+  // Force-terminate any lingering WebSocket connections before closing the server,
+  // otherwise wss.close() blocks waiting for clients to disconnect gracefully.
+  for (const client of wss.clients) client.terminate();
+  wss.close(() => server.close(done));
 });
 
 // ---------------------------------------------------------------------------

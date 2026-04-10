@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
-from pydantic import BaseModel, field_validator
+from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks, Request
+from pydantic import BaseModel
+from typing import Optional, Any
 import uuid
 import secrets
 from datetime import datetime, timezone
@@ -8,8 +9,9 @@ from app.config import settings
 
 router = APIRouter(prefix="/api")
 
-def verify_admin(token: str = Header(None)):
-    if token != settings.admin_token:
+def verify_admin(request: Request):
+    token = request.headers.get('token') or request.query_params.get('token')
+    if not token or token != settings.admin_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return token
 
@@ -69,29 +71,31 @@ def get_categories(token: str = Header(None)):
         return [dict(row) for row in cursor.fetchall()]
 
 class CategoryCreate(BaseModel):
-    name: str
-    price: int
+    name: Optional[str] = None
+    price: Optional[int] = None
 
 @router.post("/categories", status_code=201)
 def create_category(category: CategoryCreate, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
-    if not category.name or not category.name.strip():
+    name = category.name.strip() if category.name else ''
+    if not name:
         raise HTTPException(status_code=400, detail="name is required")
-    if not isinstance(category.price, int) or category.price <= 0:
+    price = category.price
+    if price is None or not isinstance(price, int) or isinstance(price, bool) or price <= 0:
         raise HTTPException(status_code=400, detail="price must be a positive integer")
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (category.name,))
+        cursor.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (name,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Categoria já existe")
             
         new_id = str(uuid.uuid4())
         cursor.execute(
             "INSERT INTO categories (id, name, price) VALUES (?, ?, ?)",
-            (new_id, category.name, category.price)
+            (new_id, name, price)
         )
         conn.commit()
         
-        new_cat = {"id": new_id, "name": category.name, "price": category.price, "total_entries": 0, "total_exits": 0}
+        new_cat = {"id": new_id, "name": name, "price": price, "total_entries": 0, "total_exits": 0}
         
         from app.api.ws_admin import manager
         background_tasks.add_task(manager.broadcast, {"type": "category_updated", "category": new_cat})
@@ -99,10 +103,10 @@ def create_category(category: CategoryCreate, background_tasks: BackgroundTasks,
         return new_cat
 
 class StoreCreate(BaseModel):
-    name: str
+    name: Optional[str] = None
 
 class StoreUpdate(BaseModel):
-    name: str
+    name: Optional[str] = None
 
 @router.post("/stores", status_code=201)
 def create_store(store: StoreCreate, token: str = Depends(verify_admin)):
@@ -228,22 +232,8 @@ def get_analytics():
 # --- Distribuição Admin ---
 
 class DistributionCreate(BaseModel):
-    name: str
-    num_boxes: int
-
-    @field_validator('name')
-    @classmethod
-    def validate_name(cls, v):
-        if not v or not v.strip():
-            raise ValueError('name cannot be empty')
-        return v
-
-    @field_validator('num_boxes')
-    @classmethod
-    def validate_num_boxes(cls, v):
-        if v <= 0:
-            raise ValueError('num_boxes must be a positive integer')
-        return v
+    name: Optional[str] = None
+    num_boxes: Optional[Any] = None
 
 @router.get("/distribution")
 def list_distributions(token: str = Depends(verify_admin)):
@@ -254,15 +244,23 @@ def list_distributions(token: str = Depends(verify_admin)):
 
 @router.post("/distribution", status_code=201)
 def create_distribution(dist: DistributionCreate, token: str = Depends(verify_admin)):
+    name = dist.name.strip() if dist.name else ''
+    num_boxes = dist.num_boxes
+    # mirrors Node.js: if (!name || !num_boxes) → 400
+    if not name or not num_boxes:
+        raise HTTPException(status_code=400, detail="name and num_boxes are required")
+    # mirrors Node.js: if (!Number.isInteger(num_boxes) || num_boxes <= 0) → 400
+    if not isinstance(num_boxes, int) or isinstance(num_boxes, bool) or num_boxes <= 0:
+        raise HTTPException(status_code=400, detail="num_boxes must be a positive integer")
     with get_db_connection() as conn:
         cursor = conn.cursor()
         new_id = str(uuid.uuid4())
         cursor.execute(
             "INSERT INTO distributions (id, name, num_boxes, status, created_at) VALUES (?, ?, ?, ?, ?)",
-            (new_id, dist.name, dist.num_boxes, 'planning', datetime.now(timezone.utc).isoformat())
+            (new_id, name, num_boxes, 'planning', datetime.now(timezone.utc).isoformat())
         )
         conn.commit()
-        return {"id": new_id, "name": dist.name, "num_boxes": dist.num_boxes, "status": "planning"}
+        return {"id": new_id, "name": name, "num_boxes": num_boxes, "status": "planning"}
 
 @router.get("/distribution/suggest")
 def get_distribution_suggestion(token: str = Depends(verify_admin)):
@@ -348,7 +346,7 @@ def calculate_distribution_endpoint(dist_id: str, token: str = Depends(verify_ad
             
             conn.commit()
             return {"message": "Distribuição calculada com sucesso", "warnings": result["warnings"]}
-        except ValueError as e:
+        except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/distribution/{dist_id}/activate")
@@ -409,7 +407,7 @@ def delete_distribution(dist_id: str, token: str = Depends(verify_admin)):
 def get_active_packing(token: str = Depends(verify_admin)):
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM distributions WHERE status = 'active'")
+        cursor.execute("SELECT * FROM distributions WHERE status = 'active' ORDER BY created_at DESC")
         dist = cursor.fetchone()
         if not dist:
             raise HTTPException(status_code=404, detail="Nenhuma distribuição ativa no momento.")
@@ -442,18 +440,21 @@ def get_active_packing(token: str = Depends(verify_admin)):
         return {"distribution": dict(dist), "boxes": boxes, "stats": stats}
 
 class ClaimRequest(BaseModel):
-    responsible_name: str
+    responsible_name: Optional[str] = None
 
 @router.post("/packing/boxes/{box_id}/claim")
 def claim_box_endpoint(box_id: str, req: ClaimRequest, background_tasks: BackgroundTasks, token: str = Depends(verify_admin)):
     from app.services.box_service import claim_box
+    responsible_name = req.responsible_name.strip() if req.responsible_name else ''
+    if not responsible_name:
+        raise HTTPException(status_code=400, detail="O seu nome é obrigatório para assumir a caixa.")
     try:
-        claim_box(box_id, req.responsible_name)
+        claim_box(box_id, responsible_name)
         from app.api.ws_packing import manager as packing_manager
         background_tasks.add_task(packing_manager.broadcast, {
-            "type": "box_claimed", 
-            "box_id": box_id, 
-            "responsible_name": req.responsible_name
+            "type": "box_claimed",
+            "box_id": box_id,
+            "responsible_name": responsible_name
         })
         return {"message": "Caixa assumida com sucesso!"}
     except ValueError as e:
