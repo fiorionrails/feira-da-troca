@@ -1,9 +1,9 @@
-const Database = require('better-sqlite3');
+const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const config = require('./config');
 const log = require('./logger');
 
-// OUROBOROS_DATA_DIR permite que o launcher Tauri defina onde ficam .db e better_sqlite3.node.
+// OUROBOROS_DATA_DIR permite que o launcher Tauri defina onde fica o .db.
 // Fallback: ao lado do .exe (pkg) ou raiz do projeto (dev).
 const basePath = process.env.OUROBOROS_DATA_DIR ||
   (process.pkg ? path.dirname(process.execPath) : path.join(__dirname, '..'));
@@ -12,28 +12,60 @@ const DB_PATH = path.isAbsolute(config.databaseUrl)
   ? config.databaseUrl
   : path.resolve(basePath, config.databaseUrl);
 
+/**
+ * Thin wrapper over node:sqlite (built into Node.js v22+, no native compilation)
+ * that adds .pragma() and .transaction() to match the better-sqlite3 API used
+ * throughout the codebase.
+ */
+class SqliteDb {
+  constructor(dbPath) {
+    this._db = new DatabaseSync(dbPath);
+  }
+
+  pragma(str) {
+    try {
+      this._db.exec(`PRAGMA ${str}`);
+    } catch (_) {
+      // Ignore unsupported pragmas (e.g. journal_mode = WAL on :memory:)
+    }
+  }
+
+  exec(sql) {
+    this._db.exec(sql);
+  }
+
+  prepare(sql) {
+    return this._db.prepare(sql);
+  }
+
+  transaction(fn) {
+    return (...args) => {
+      this._db.exec('BEGIN');
+      try {
+        const result = fn(...args);
+        this._db.exec('COMMIT');
+        return result;
+      } catch (e) {
+        try { this._db.exec('ROLLBACK'); } catch (_) {}
+        throw e;
+      }
+    };
+  }
+}
+
 let _db = null;
 
 function getDb() {
   if (!_db) {
     log.dbConnect(DB_PATH);
-    
-    const dbOptions = {};
-    if (process.pkg) {
-      // BETTER_SQLITE3_BINDING pode ser passado pelo launcher para apontar
-      // para o .node nativo extraído nos recursos do Tauri.
-      dbOptions.nativeBinding = process.env.BETTER_SQLITE3_BINDING ||
-        path.join(basePath, 'better_sqlite3.node');
-    }
 
-    _db = new Database(DB_PATH, dbOptions);
-    
+    _db = new SqliteDb(DB_PATH);
+
     _db.pragma('journal_mode = WAL');
     _db.pragma('synchronous = NORMAL');
     _db.pragma('foreign_keys = ON');
     _db.pragma('cache_size = -64000');
 
-    // Inicialização automática de todas as Tabelas caso não existam no .exe!
     _db.exec(`
       CREATE TABLE IF NOT EXISTS comandas (
         id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, holder_name TEXT NOT NULL, created_at TEXT NOT NULL
@@ -55,7 +87,6 @@ function getDb() {
         SELECT comanda_id, SUM(CASE WHEN type='credit' THEN amount ELSE -amount END) AS balance
         FROM events GROUP BY comanda_id;
 
-      -- Novas Tabelas de Distribuição (v2)
       CREATE TABLE IF NOT EXISTS distributions (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, num_boxes INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'planning', needs_recalc INTEGER NOT NULL DEFAULT 0,
@@ -80,7 +111,6 @@ function getDb() {
         FROM stores s LEFT JOIN boxes b ON b.assigned_store_id = s.id
         GROUP BY s.id;
 
-      -- Índices para queries críticas de performance
       CREATE INDEX IF NOT EXISTS idx_events_comanda_id ON events(comanda_id);
       CREATE INDEX IF NOT EXISTS idx_events_store_id ON events(store_id);
       CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
@@ -98,4 +128,4 @@ function _overrideDb(testDb) {
   _db = testDb;
 }
 
-module.exports = { getDb, _overrideDb };
+module.exports = { getDb, _overrideDb, SqliteDb };
