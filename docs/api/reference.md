@@ -2,7 +2,7 @@
 
 A API do Ouroboros é exposta na porta `8000` e é idêntica nos dois backends disponíveis:
 
-- **Node.js** (`backend-node/`) — Express + better-sqlite3
+- **Node.js** (`backend-node/`) — Express + node:sqlite *(SQLite embutido no Node.js v22+, sem dependência nativa externa)*
 - **Python** (`backend-python/`) — FastAPI + Uvicorn *(ao usar o backend Python, a documentação interativa está disponível em `/docs` (Swagger UI) e `/redoc` (ReDoc) enquanto o servidor estiver rodando)*
 
 !!! note "Backend como fonte única de verdade"
@@ -122,7 +122,7 @@ Retorna a visão macro da economia da feira.
 
 | Campo | Descrição |
 |---|---|
-| `total_issued` | Soma de todos os créditos iniciais emitidos |
+| `total_issued` | Soma de todos os créditos **iniciais** emitidos (eventos com `note = 'Saldo inicial'`). Créditos adicionais adicionados após o cadastro **não** entram neste total — consulte `total_circulating` para o saldo real em circulação. |
 | `total_circulating` | Soma dos saldos atuais de todas as comandas |
 | `comandas_active` | Total de comandas cadastradas |
 | `stores_registered` | Total de lojas cadastradas |
@@ -816,6 +816,9 @@ Adiciona crédito extra a uma comanda já existente. O campo `cart_items` segue 
 - `comanda_code`: obrigatório, normalizado (trim + uppercase)
 - `amount`: inteiro estritamente positivo (> 0)
 
+!!! info "Campo `note` no evento gerado"
+    Ao receber `add_credit`, o servidor cria um evento de crédito com `note = 'Crédito adicional'`. Isso o diferencia dos créditos iniciais (`note = 'Saldo inicial'`) na auditoria. Ambos contribuem para o saldo da comanda, mas **apenas** os créditos iniciais entram no `total_issued` de `/reports/economy_state`.
+
 **Erros:**
 ```json
 { "type": "error", "reason": "comanda_code is required" }
@@ -951,6 +954,9 @@ Após conectar:
 }
 ```
 
+!!! note "Diferença entre backends"
+    O campo `message` da mensagem de boas-vindas tem texto ligeiramente diferente entre os dois backends (o backend Python inclui `"(Python)"` no texto). O campo `type` e `role` são idênticos — código cliente deve verificar `type === 'connected'` e ignorar o conteúdo exato de `message`.
+
 **Erros de conexão:**
 
 | Código WS | Motivo | Causa |
@@ -1017,6 +1023,7 @@ Disparado quando o algoritmo de recálculo automático é executado (após `comp
 | `400` | `price must be a positive integer` | Preço zero, negativo ou não-inteiro em POST /categories |
 | `400` | `Categoria já existe` | Nome de categoria duplicado (case-insensitive) |
 | `400` | `name and num_boxes are required` | Campos obrigatórios ausentes em POST /distribution |
+| `400` | `num_boxes must be a positive integer` | `num_boxes` é zero, negativo, float ou não-numérico em POST /distribution |
 | `400` | `Nenhuma loja cadastrada para receber caixas.` | Tentativa de calcular distribuição sem lojas |
 | `400` | `Nenhum produto cadastrado para distribuir.` | Tentativa de calcular sem categorias com entradas |
 | `400` | `Impossível criar N caixas com apenas M itens.` | Mais caixas solicitadas do que itens disponíveis |
