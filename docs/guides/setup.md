@@ -46,7 +46,7 @@ Edite o `.env` com os valores do seu ambiente:
 ```env
 # Segurança
 ADMIN_TOKEN=seu_token_admin_aqui
-SECRET_KEY=chave_secreta_aleatoria
+SECRET_KEY=chave_secreta_aleatoria  # Reservado para uso futuro (ex: JWT/HMAC com Firebase). Não tem efeito funcional hoje.
 
 # Banco de dados (padrão é o diretório do backend-node/)
 DATABASE_URL=./ouroboros.db

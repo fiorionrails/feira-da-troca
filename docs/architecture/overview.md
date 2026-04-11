@@ -122,8 +122,9 @@ Event
   id: UUID
   type: ENUM (credit | debit)
   comanda_id: UUID → Comanda
-  amount: integer (centavos fictícios)
+  amount: integer (ETC inteiros)
   store_id: UUID → Store
+  note: string (ex: "Saldo inicial", "Crédito adicional" — usado para auditoria e filtragem de relatórios)
   timestamp: timestamp
   synced_to_firebase: integer (reservado para uso futuro — não implementado)
 
@@ -136,7 +137,7 @@ Store
 Category (Tabela de Preços e Categorização)
   id: UUID
   name: string (ex: "Jaqueta")
-  price: integer (centavos fictícios)
+  price: integer (ETC inteiros)
   total_entries: integer (contador acumulativo de entrada no banco)
   total_exits: integer (contador acumulativo de vendas confirmadas)
 
